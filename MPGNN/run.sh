@@ -4,8 +4,8 @@ num_rel=5
 ll_output_dim=2
 n_layers=3
 metapath_length=3
-MP_GNN='True'
-metapath='210'
+MP_GNN='False'
+metapath='3210'
 
 dataset="complex"
 folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/${dataset}/length_m_${metapath_length}__tot_rel_${num_rel}"

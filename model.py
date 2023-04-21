@@ -6,7 +6,7 @@ import torch.nn as nn
 import random
 
 
-FEATURES_DIM = 3066
+FEATURES_DIM = 4615#3066
 
 class InputLayer(torch.nn.Module):
     def __init__(self, weights):
@@ -200,9 +200,59 @@ class MPNet(torch.nn.Module):
 
         for layer_index in range(0, len(self.metapath)):
             if layer_index == 0:
-                x = F.relu(self.conv1(self.metapath[layer_index], x, edge_index, edge_type))
+                h = F.relu(self.conv1(self.metapath[layer_index], x, edge_index, edge_type))
             else:
-                x = F.relu(self.conv2(self.metapath[layer_index], x, edge_index, edge_type))
-        x = self.LinearLayer(x)
-        return F.log_softmax(x, dim=1)
+                h = F.relu(self.conv2(self.metapath[layer_index], h, edge_index, edge_type))
+        h = self.LinearLayer(h)
+        #return F.log_softmax(x, dim=1)
+        return h
+    
 
+class MPNetm(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, n_metapaths, metapaths):
+        super().__init__()
+        self.n_metapaths = n_metapaths
+        self.metapaths = metapaths
+
+        self.layers_list = torch.nn.ModuleList()
+        
+        for i in range(0, len(metapaths)):
+            convs = torch.nn.ModuleList()
+            convs.append(CustomRGCNConv(input_dim, hidden_dim, num_rel, flow='target_to_source'))
+            for j in range(0, len(metapaths[i])-1):
+                convs.append(CustomRGCNConv(hidden_dim, hidden_dim, num_rel, flow='target_to_source'))
+            self.layers_list.append(convs)
+        
+        self.fc1 = torch.nn.Linear(hidden_dim * len(metapaths), hidden_dim)
+        self.fc2 = torch.nn.Linear(hidden_dim, ll_output_dim)
+        self.log_softmax = torch.nn.LogSoftmax(dim=1)
+        #self.softmax = torch.nn.Softmax(dim=1)
+
+    def forward(self, x, edge_index, edge_type):
+        embeddings = []
+        for i in range(0, len(self.metapaths)):
+            for layer_index in range(0, len(self.metapaths[i])):
+                if layer_index == 0:
+                    h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], x, edge_index, edge_type))
+                else:
+                    h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], h, edge_index, edge_type))
+            embeddings.append(h)
+        concatenated_embedding = torch.cat(embeddings, dim=1)
+        h = F.relu(self.fc1(concatenated_embedding))
+        h = F.relu(self.fc2(h))
+        h = self.log_softmax(h)
+        return h
+
+
+
+
+
+# for i in range(0, len(metapaths)):
+#             convs = torch.nn.ModuleList()
+#             self.layers_dict[i].append(CustomRGCNConv(input_dim, hidden_dim, num_rel, flow='target_to_source'))
+#             for j in range(0, len(metapaths[i])-1):
+#                 self.layers_dict[i].append(CustomRGCNConv(hidden_dim, hidden_dim, num_rel, flow='target_to_source'))
+#             # self.layers_dict[i].append(torch.nn.Linear(output_dim, ll_output_dim))
+        
+#         self.fc1 = torch.nn.Linear(hidden_dim * len(metapaths), hidden_dim)
+#         self.fc2 = torch.nn.Linear(hidden_dim, ll_output_dim)
