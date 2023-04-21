@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch import Tensor
 import torch.nn as nn
 import random
+import numpy as np
 
 
 FEATURES_DIM = 4615#3066
@@ -228,31 +229,31 @@ class MPNetm(torch.nn.Module):
         self.log_softmax = torch.nn.LogSoftmax(dim=1)
         #self.softmax = torch.nn.Softmax(dim=1)
 
+        #self.dropout1 = nn.Dropout(0.25)
+        #self.dropout2 = nn.Dropout(0.25) #togli p
+
     def forward(self, x, edge_index, edge_type):
         embeddings = []
+        sum = 0
         for i in range(0, len(self.metapaths)):
             for layer_index in range(0, len(self.metapaths[i])):
                 if layer_index == 0:
                     h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], x, edge_index, edge_type))
+                    #h = self.dropout1(h)
                 else:
                     h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], h, edge_index, edge_type))
+                    #h = self.dropout2(h)
             embeddings.append(h)
+
+        #for e in embeddings:
+        #    sum += e
+        #embeddings.append(sum)
         concatenated_embedding = torch.cat(embeddings, dim=1)
+
+        #print(concatenated_embedding)
         h = F.relu(self.fc1(concatenated_embedding))
         h = F.relu(self.fc2(h))
         h = self.log_softmax(h)
         return h
 
 
-
-
-
-# for i in range(0, len(metapaths)):
-#             convs = torch.nn.ModuleList()
-#             self.layers_dict[i].append(CustomRGCNConv(input_dim, hidden_dim, num_rel, flow='target_to_source'))
-#             for j in range(0, len(metapaths[i])-1):
-#                 self.layers_dict[i].append(CustomRGCNConv(hidden_dim, hidden_dim, num_rel, flow='target_to_source'))
-#             # self.layers_dict[i].append(torch.nn.Linear(output_dim, ll_output_dim))
-        
-#         self.fc1 = torch.nn.Linear(hidden_dim * len(metapaths), hidden_dim)
-#         self.fc2 = torch.nn.Linear(hidden_dim, ll_output_dim)
