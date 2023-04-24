@@ -24,6 +24,9 @@ from sklearn.cluster import KMeans
 
 from mpi4py import MPI
 
+seed= 10
+torch.manual_seed(seed)
+
 
 def masked_edge_index(edge_index, edge_mask):
     if isinstance(edge_index, Tensor):
@@ -747,11 +750,12 @@ def save_confusion_matrix(node_mask, data, emb, index):
 def mpgnn_train(model, optimizer, data):
     model.train()
     optimizer.zero_grad()
-    weight_loss = torch.tensor([1., 100.])
+    #weight_loss = torch.tensor([1., 10.])
     out = model(data.x, data.edge_index, data.edge_type)
+    #print(out)
     # for i in range(0, len(data.train_y)):
-    #     print(out[data.train_idx].squeeze(-1)[i].item(), data.train_y[i].item())
-    loss = F.nll_loss(out[data.train_idx].squeeze(-1), data.train_y, weight = weight_loss)
+    #     print(out[data.train_idx].squeeze(-1)[i].item(), data.tra9#in_y[i].item())
+    loss = F.nll_loss(out[data.train_idx].squeeze(-1), data.train_y)#, weight = weight_loss)
     #loss = F.cross_entropy(out[data.train_idx], data.train_y)
     loss.backward()
     optimizer.step()
@@ -761,16 +765,18 @@ def mpgnn_train(model, optimizer, data):
 def mpgnn_test(model, data):
     model.eval()
     pred = model(data.x, data.edge_index, data.edge_type)#.argmax(dim=-1)
+    loss_test = F.nll_loss(pred[data.test_idx].squeeze(-1), data.test_y)
+    
     train_predictions = torch.argmax(pred[data.train_idx], 1).tolist()
     test_predictions = torch.argmax(pred[data.test_idx], 1).tolist()
     train_y = data.train_y.tolist()
     test_y = data.test_y.tolist()
     # train_acc = (train_predictions == train_y).float().mean()
     # test_acc = (test_predictions == test_y).float().mean()
-    f1_train = f1_score(train_predictions, train_y, average='macro')
+    f1_train = f1_score(train_predictions, train_y, average='micro')
     f1_test_macro = f1_score(test_predictions, test_y, average = 'macro')
     f1_test_micro = f1_score(test_predictions, test_y, average = 'micro')
-    return f1_train, f1_test_micro, f1_test_macro
+    return f1_train, f1_test_micro, f1_test_macro,loss_test
 
 def mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath):
     metapath=[0, 1, 2]
@@ -791,24 +797,24 @@ def mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_ou
 
 def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapaths):
     #metapaths = [[2, 0]]#, [3, 1]]
-    #metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
+    metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
     #metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
-    metapaths = [[2, 4, 0], [0, 3, 4], [0, 1]]
     mpgnn_model = MPNetm(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapaths), metapaths)
     print(mpgnn_model)
     # for name, param in mpgnn_model.named_parameters():
     #     print(name, param, param.size())
     mpgnn_optimizer = torch.optim.Adam(mpgnn_model.parameters(), lr=0.01, weight_decay=0.0005)
     best_macro, best_micro = 0., 0.
-    for epoch in tqdm(range(1, 1000)):
+    for epoch in range(1, 1000):
         loss = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
-        train_acc, f1_test_micro, f1_test_macro = mpgnn_test(mpgnn_model, data_mpgnn)
-        print(epoch, 'loss: ', loss, 'train acc: ', train_acc, 'micro: ', f1_test_micro)
-        if f1_test_macro > best_macro:
-            best_macro = f1_test_micro
-        if f1_test_micro > best_micro:
-            best_micro = f1_test_micro
-    return best_micro
+        if epoch % 10 == 0:
+            train_acc, f1_test_micro, f1_test_macro,loss_test = mpgnn_test(mpgnn_model, data_mpgnn)
+            print(epoch, "train loss %0.3f" % loss, "test loss %0.3f" % loss_test,
+                  'train micro: %0.3f'% train_acc, 'test micro: %0.3f'% f1_test_micro)
+            if f1_test_macro > best_macro:
+                best_macro = f1_test_micro
+            if f1_test_micro > best_micro:
+                best_micro = f1_test_micro
 
 def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset):
     # Obtain true 0|1 labels for each node, feature matrix (1-hot encoding) and links among nodes
@@ -1296,7 +1302,7 @@ if __name__ == '__main__':
 
     
     EPOCHS = 200
-    COMPLEX = 'synthetic_multi'
+    COMPLEX = 'DBLP'
     RESTARTS = 5
     NEGATIVE_SAMPLING = False
 
@@ -1329,9 +1335,9 @@ if __name__ == '__main__':
         folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"
     elif COMPLEX == 'synthetic_multi':
         input_dim=6
-        tot_rel=10
+        tot_rel=5
         ll_output_dim=2
-        dataset = 'tot_rel_10'
+        dataset = 'tot_rel_5'
         folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/synthetic_multi/" + dataset + "/"
     
     node_file= folder + "node.dat"
