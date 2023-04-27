@@ -15,6 +15,7 @@ import os
 from sklearn.metrics import f1_score
 
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
 from functools import partial
@@ -76,19 +77,34 @@ def load_files(node_file_path, links_file_path, label_file_path, embedding_file_
         #         labels[i] = 0
         return labels, colors, links, source_nodes_with_labels, labels_multi
 
-def splitting_node_and_labels(lab, feat, src, dataset):
-    if dataset == 'complex' or dataset == 'simple':
-        node_idx = torch.tensor(feat['node'].values)
-    else:
-        node_idx = torch.tensor(src)
-    train_split = int(len(node_idx)*0.8)
-    test_split = len(node_idx) - train_split
-    train_idx = node_idx[:train_split]
-    test_idx = node_idx[-test_split:]
+# def splitting_node_and_labels(lab, feat, src, dataset):
+#     if dataset == 'complex' or dataset == 'simple':
+#         node_idx = torch.tensor(feat['node'].values)
+#     else:
+#         node_idx = torch.tensor(src)
+#     train_split = int(len(node_idx)*0.8)
+#     test_split = len(node_idx) - train_split
+#     train_idx = node_idx[:train_split]
+#     test_idx = node_idx[-test_split:]
 
-    train_y = lab[:train_split]
-    test_y = lab[-test_split:]
-    return node_idx, train_idx, train_y, test_idx, test_y
+#     train_y = lab[:train_split]
+#     test_y = lab[-test_split:]
+#     return node_idx, train_idx, train_y, test_idx, test_y
+
+def splitting_node_and_labels(lab, feat, src, dataset):
+    if dataset == 'complex' or dataset == 'simple' or dataset == 'synthetic_multiple':
+        node_idx = list(feat['node'].values)
+    else:
+        node_idx = src.copy()
+
+    train_idx,test_idx,train_y,test_y = train_test_split(node_idx, lab,
+                                                            random_state=415,#415,
+                                                            stratify=lab, 
+                                                            test_size=0.2)
+    print(train_y.tolist().count(0),train_y.tolist().count(1))
+    print(test_y.tolist().count(0), test_y.tolist().count(1))
+    
+    return torch.tensor(node_idx), train_idx, train_y, test_idx, test_y
 
 def get_node_features(colors):
     node_features = pd.get_dummies(colors)
@@ -797,15 +813,15 @@ def mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_ou
 
 def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapaths):
     #metapaths = [[2, 0]]#, [3, 1]]
-    metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
-    #metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
+    #metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
+    metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
     mpgnn_model = MPNetm(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapaths), metapaths)
     print(mpgnn_model)
     # for name, param in mpgnn_model.named_parameters():
     #     print(name, param, param.size())
     mpgnn_optimizer = torch.optim.Adam(mpgnn_model.parameters(), lr=0.01, weight_decay=0.0005)
     best_macro, best_micro = 0., 0.
-    for epoch in range(1, 1000):
+    for epoch in range(1, 10):
         loss = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
         if epoch % 10 == 0:
             train_acc, f1_test_micro, f1_test_macro,loss_test = mpgnn_test(mpgnn_model, data_mpgnn)
@@ -866,7 +882,26 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
     mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, mp)
     print(mpgnn_f1_micro)
 
+    # comm = MPI.COMM_WORLD
+    # rank = comm.Get_rank()
+    # size = comm.Get_size()
 
+    # # numero totale di relazioni del grafo
+    # num_relazioni = 30
+
+    # # le relazioni vengono divise in parti uguali
+    # chunk_size = num_relazioni // size
+    # remainder = num_relazioni % size
+    # print('chunk size: ', chunk_size, 'remainder: ', remainder)
+
+    # # ogni processo figlio prende una parte diversa del grafo
+    # if rank < remainder:
+    #     start_idx = rank * (chunk_size + 1)
+    #     end_idx = start_idx + chunk_size + 1
+    # else:
+    #     start_idx = rank * chunk_size + remainder
+    #     end_idx = start_idx + chunk_size
+    # print(f"Rank {rank}: start_idx={start_idx}, end_idx={end_idx}")
 
     # BLOCK = False
     # l = list(data.labels)
@@ -1302,7 +1337,7 @@ if __name__ == '__main__':
 
     
     EPOCHS = 200
-    COMPLEX = 'DBLP'
+    COMPLEX = 'synthetic_multi'
     RESTARTS = 5
     NEGATIVE_SAMPLING = False
 
