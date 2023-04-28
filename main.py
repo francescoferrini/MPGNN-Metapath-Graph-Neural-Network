@@ -814,7 +814,7 @@ def mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_ou
 def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapaths):
     #metapaths = [[2, 0]]#, [3, 1]]
     #metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
-    metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
+    #metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
     mpgnn_model = MPNetm(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapaths), metapaths)
     print(mpgnn_model)
     # for name, param in mpgnn_model.named_parameters():
@@ -831,7 +831,7 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
                 best_macro = f1_test_micro
             if f1_test_micro > best_micro:
                 best_micro = f1_test_micro
-    return best_macro
+    return best_micro
 
 def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset):
     # Obtain true 0|1 labels for each node, feature matrix (1-hot encoding) and links among nodes
@@ -880,8 +880,8 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
     # All possible relations
     relations = torch.unique(data.edge_type).tolist()
     mp = []
-    mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, mp)
-    print(mpgnn_f1_micro)
+    #mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, mp)
+    #print(mpgnn_f1_micro)
 
     # comm = MPI.COMM_WORLD
     # rank = comm.Get_rank()
@@ -1130,15 +1130,16 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
 ######################################################################################
 ######################################################################################
 
-
-    metapath = []
-    multiple_metapaths = {}
+    # MPI variables
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
-    # rank = comm.Get_rank()
+    rank = comm.Get_rank()
 
-    # Father process
-    if comm.rank == 0:
+    # metapaths variables
+    current_metapaths_list, current_metapaths_dict = [], {}
+    final_metapaths_list, final_metapaths_dict = [], {}
+
+    if rank == 0:
         # Dataset for score function
         data = Data()
         data.x = x
@@ -1149,96 +1150,124 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         data.num_nodes = x.size(0)
         data.bags = torch.empty(1)
         data.bag_labels = torch.empty(1)
+        data.source_nodes_mask = source_nodes_mask
 
         # All possible relations
         relations = torch.unique(data.edge_type).tolist()
-        print(" \t\t ITERARION 1 ")
-        for i, element in enumerate(relations):
-            # copy of dataset
-            data_copy = data.clone()
-            # Index of child process 
-            rank = i % (size - 1) + 1
-            comm.send((data_copy, element, source_nodes_mask), dest=rank, tag=0)
-        
-        # Results from child processes
-        results = []
-        for i in range(len(relations)):
-            result = comm.recv()
-            results.append(result)
-        losses = []
-        for r in results:
-                losses.append(r[1])
-                print(r[0], r[1])
-        # calculate  a loss-threshold (we want to keep only relations with the smallest losses
-        # but may be more than one -> multiple meta-paths)
-        threshold = np.mean(losses)
-        best = [item for item in results if item[1] < threshold]
-        for i, element in enumerate(best):
-            # copy of dataset
-            data_mpgnn_copy = data_mpgnn.clone()
-            # Index of child process 
-            rank = i % (size - 1) + 1
-            comm.send((data_mpgnn_copy, element), dest=rank, tag=1)
-        metapaths = []
-        # Results from child processes
-        for i in range(len(best)):
-            tmp = []
-            result = comm.recv()
-            multiple_metapaths[str(best[i][0])] = best[i][1]
-            tmp.append(best[i][1]) # metapath accuracy
-            tmp.append(best[i][2]) # relation edge_dictionary
-            tmp.append(best[i][3]) # relation dest_dictionary
-            multiple_metapaths[str(best[i][0])] = tmp
-            metapaths.append([best[i][0]])
-        # for a in mpgnn_accuracies:
-        #     print('a:', a)
     else:
-        # Receive dataset and relation from father process
-        data, element, source_nodes_mask = comm.recv(tag=0)
+        data = None
+        relations = None
 
-        # Execute the function
-        result = score_relation_parallel(data, element, source_nodes_mask)
+    # Il processo padre invia i dati ai processi figli
+    data = comm.bcast(data, root=0)
+    relations = comm.bcast(relations, root=0)
 
-        # Send result to father process
-        comm.send(result, dest=0)
+    # Ogni processo figlio riceve solo una parte della lista graph
+    local_relations = np.array_split(relations, size)[rank]
 
+    # Execute the function
+    result = []
+    for rel in local_relations:
+        partial_result = score_relation_parallel(data, rel, data.source_nodes_mask)
+        result.append(partial_result)
 
-    if comm.rank != 0:
-        # Receive dataset and relation from father process
-        data_mp, element = comm.recv(tag=1)
+    # Ogni processo figlio invia il risultato al processo padre
+    result = comm.gather(result, root=0)
 
-        # run mpgnn
-        mp = []
-        best_relation = element[0]
-        mp.insert(0, best_relation)
-        mpgnn_f1_micro = mpgnn_parallel(data_mp, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, mp)
-        # Send result to father process
-        comm.send((mp, mpgnn_f1_micro), dest=0)
+    if rank == 0:
+        # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
+        final_result = []
+        for list in result:
+            for tuple in list:
+                final_result.append(tuple)
+        # print(final_result)
+        # final_result[0][0] -> relation
+        # final_result[0][1] -> loss 
+        # final_result[0][2] -> edge_dictionary
+        # final_result[0][3] -> dest_dictionary
 
+        # calculate  a loss-threshold (we want to keep only relations with the smallest losses
+        # but may be more than one -> multiple meta-paths
+        mean = np.mean([t[1] for t in final_result]) 
+        # take only the relations under the mean threshold (best is a list of tuples)
+        best = [item for item in final_result if item[1] < mean]
+        # save relations in metapaths list
+        for tuple in best:
+            current_metapaths_list.append([tuple[0]])
+            current_metapaths_dict[str([tuple[0]])] = []
+            current_metapaths_dict[str([tuple[0]])].append(tuple[2])
+            current_metapaths_dict[str([tuple[0]])].append(tuple[3])
+        for i in range(0, len(current_metapaths_list)):
+            mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, [current_metapaths_list[i]])
+            current_metapaths_dict[str(current_metapaths_list[i])].insert(0, mpgnn_f1_micro)
+        # print(current_metapaths_list)
+        # print(current_metapaths_dict)    
 
-    actual_paths = len(metapaths)
+    # send current metapaths list and dict to children
+    current_metapaths_list = comm.bcast(current_metapaths_list, root=0)
+    current_metapaths_dict = comm.bcast(current_metapaths_dict, root=0)
 
-    while metapaths:
-        if comm.rank == 0:
-            tmp_metapath = []
-            results_dict = {}
-            print(" \t\t ITERARION ", idx+2)
-            # Create node bsags
-            create_bags(best_edge_dictionary, best_dest_dictionary, data)
-            for i, element in enumerate(relations):
-                # copy of dataset
-                data_copy = data.clone()
-                # Index of child process 
-                rank = i % (size - 1) + 1
-                comm.send((data_copy, element), dest=rank, tag=2)
-        else:
-            #Receive new information
-            data, element = comm.recv(tag=2)
+    while current_metapaths_list:
+        print('after while')
+        for i in range(0, len(current_metapaths_list)):
+            if rank == 0:
+                create_bags(current_metapaths_dict[str(current_metapaths_list[i])][1], current_metapaths_dict[str(current_metapaths_list[i])][2], data)
+            # Il processo padre invia i dati ai processi figli
+            data = comm.bcast(data, root=0)
+            relations = comm.bcast(relations, root=0)
+
+            # Ogni processo figlio riceve solo una parte della lista graph
+            local_relations = np.array_split(relations, size)[rank]
+
             # Execute the function
-            result = score_relation_bags_parallel(data, element)
-            print('I did it')
-            # Send result to father process
-            #comm.send(result, dest=0)
+            result = []
+            for rel in local_relations:
+                partial_result = score_relation_bags_parallel(data, rel)
+                result.append(partial_result)
+
+            # Ogni processo figlio invia il risultato al processo padre
+            result = comm.gather(result, root=0)
+            
+            if rank == 0:
+                bool = False
+                # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
+                final_result = []
+                for list in result:
+                    for tuple in list:
+                        final_result.append(tuple)
+                # relation, loss.item(), model, predictions_for_each_restart
+                for j in range(0, len(final_result)):
+                    if final_result[j][1] <= 0.01:
+                        tmp_meta = current_metapaths_list[i]
+                        tmp_meta.insert(0, final_result[0])
+                        mpgnn_f1_micro = mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, tmp_meta)
+                        if mpgnn_f1_micro > current_metapaths_dict[str(current_metapaths_list[i])][0]
+                            current_metapaths_list.append(tmp_meta)
+
+
+            # if rank == 0:
+            #     # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
+            #     final_result = []
+            #     for list in result:
+            #         for tuple in list:
+            #             final_result.append(tuple)
+            #     for res in final_result:
+            #         print(res[0])
+            #     current_metapaths_list = []
+
+
+
+
+
+    
+
+
+
+        
+
+
+
+
 
 
     
@@ -1338,7 +1367,7 @@ if __name__ == '__main__':
 
     
     EPOCHS = 200
-    COMPLEX = 'synthetic_multi'
+    COMPLEX = True
     RESTARTS = 5
     NEGATIVE_SAMPLING = False
 
