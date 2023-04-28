@@ -821,7 +821,7 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
     #     print(name, param, param.size())
     mpgnn_optimizer = torch.optim.Adam(mpgnn_model.parameters(), lr=0.01, weight_decay=0.0005)
     best_macro, best_micro = 0., 0.
-    for epoch in range(1, 1000):
+    for epoch in range(1, 2000):
         loss = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
         if epoch % 10 == 0:
             train_acc, f1_test_micro, f1_test_macro,loss_test = mpgnn_test(mpgnn_model, data_mpgnn)
@@ -831,6 +831,7 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
                 best_macro = f1_test_micro
             if f1_test_micro > best_micro:
                 best_micro = f1_test_micro
+    return best_macro
 
 def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset):
     # Obtain true 0|1 labels for each node, feature matrix (1-hot encoding) and links among nodes
