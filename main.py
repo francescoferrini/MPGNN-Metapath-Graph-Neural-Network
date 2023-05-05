@@ -1243,6 +1243,7 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         data.bags = torch.empty(1)
         data.bag_labels = torch.empty(1)
         data.source_nodes_mask = source_nodes_mask
+        data.source_nodes_mask = source_nodes_mask
 
         # All possible relations
         relations = torch.unique(data.edge_type).tolist()
@@ -1358,6 +1359,57 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
             current_metapaths_list = intermediate_metapaths_list.copy()
         
 
+    # send current metapaths list and dict to children
+    current_metapaths_list = comm.bcast(current_metapaths_list, root=0)
+    current_metapaths_dict = comm.bcast(current_metapaths_dict, root=0)
+
+    while current_metapaths_list:
+        print('after while')
+        for i in range(0, len(current_metapaths_list)):
+            if rank == 0:
+                create_bags(current_metapaths_dict[str(current_metapaths_list[i])][1], current_metapaths_dict[str(current_metapaths_list[i])][2], data)
+            # Il processo padre invia i dati ai processi figli
+            data = comm.bcast(data, root=0)
+            relations = comm.bcast(relations, root=0)
+
+            # Ogni processo figlio riceve solo una parte della lista graph
+            local_relations = np.array_split(relations, size)[rank]
+
+            # Execute the function
+            result = []
+            for rel in local_relations:
+                partial_result = score_relation_bags_parallel(data, rel)
+                result.append(partial_result)
+
+            # Ogni processo figlio invia il risultato al processo padre
+            result = comm.gather(result, root=0)
+            
+            if rank == 0:
+                bool = False
+                # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
+                final_result = []
+                for list in result:
+                    for tuple in list:
+                        final_result.append(tuple)
+                # relation, loss.item(), model, predictions_for_each_restart
+                for j in range(0, len(final_result)):
+                    if final_result[j][1] <= 0.01:
+                        tmp_meta = current_metapaths_list[i]
+                        tmp_meta.insert(0, final_result[0])
+                        mpgnn_f1_micro = mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, tmp_meta)
+                        if mpgnn_f1_micro > current_metapaths_dict[str(current_metapaths_list[i])][0]
+                            current_metapaths_list.append(tmp_meta)
+
+
+            # if rank == 0:
+            #     # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
+            #     final_result = []
+            #     for list in result:
+            #         for tuple in list:
+            #             final_result.append(tuple)
+            #     for res in final_result:
+            #         print(res[0])
+            #     current_metapaths_list = []
 
 
 
