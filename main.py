@@ -46,6 +46,14 @@ def one_hot_encoding(l):
         new_labels.append(tmp)
     return torch.tensor(new_labels)     
 
+def node_types_and_connected_relations(data):
+    rels = []
+    for i in range(0, len(data.edge_type)):
+        if data.edge_index[0][i].item() in data.source_nodes_mask:
+            if data.edge_type[i].item() not in rels: rels.append(data.edge_type[i].item())
+    return rels
+    
+
 def load_files(node_file_path, links_file_path, label_file_path, embedding_file_path, dataset):
     colors = pd.read_csv(node_file_path, sep='\t', header = None)
     colors = colors.dropna(axis=1,how='all')
@@ -76,6 +84,64 @@ def load_files(node_file_path, links_file_path, label_file_path, embedding_file_
         #     else:
         #         labels[i] = 0
         return labels, colors, links, source_nodes_with_labels, labels_multi
+    
+def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data):
+    from scipy.sparse import csr_matrix
+
+    edges_list = []
+    rels = torch.unique(data.edge_type).tolist()
+    for r in rels:
+        e_idx = masked_edge_index(data.edge_index, data.edge_type == r)
+        edges = []
+        for i in range(0, len(e_idx[0])):
+            edges.append((e_idx[0][i].item(), e_idx[1][i].item()))
+        # ottieni la lista degli id dei nodi
+        node_ids = sorted(list(set([v for e in edges for v in e])))
+
+        # crea un dizionario che associa ogni id di nodo a un indice intero
+        node_to_index = {node_id: i for i, node_id in enumerate(node_ids)}
+
+        # crea le liste degli indici delle righe, delle colonne e dei valori
+        row_indices = [node_to_index[e[0]] for e in edges]
+        col_indices = [node_to_index[e[1]] for e in edges]
+        values = np.ones(len(edges))
+
+        # crea la matrice di adiacenza
+        car_matrix = csr_matrix((values, (row_indices, col_indices)), shape=(len(node_ids), len(node_ids)))
+        edges_list.append(car_matrix)
+    with open('edges.pkl', 'wb') as handle:
+        pickle.dump(edges_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        
+
+    # gtn file for labels
+    labels_list = []
+    train_labels_list = []
+    val_labels_list = []
+    test_labels_list = []
+    for i in range(0, len(train_idx)):
+        tmp = [train_idx[i], train_y[i].item()]
+        train_labels_list.append(tmp)
+    for i in range(0, len(val_idx)):
+        tmp = [val_idx[i], val_y[i].item()]
+        val_labels_list.append(tmp)
+    for i in range(0, len(test_idx)):
+        tmp = [test_idx[i], test_y[i].item()]
+        test_labels_list.append(tmp)
+    labels_list.append(train_labels_list)
+    labels_list.append(val_labels_list)
+    labels_list.append(test_labels_list)
+    with open('labels.pkl', 'wb') as handle:
+        pickle.dump(labels_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # node features
+    features = data.x.type(torch.int64)
+    with open('node_features.pkl', 'wb') as handle:
+        pickle.dump(features.numpy(), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+
+
+
 
 # def splitting_node_and_labels(lab, feat, src, dataset):
 #     if dataset == 'complex' or dataset == 'simple':
@@ -100,11 +166,16 @@ def splitting_node_and_labels(lab, feat, src, dataset):
     train_idx,test_idx,train_y,test_y = train_test_split(node_idx, lab,
                                                             random_state=415,#415,
                                                             stratify=lab, 
-                                                            test_size=0.2)
-    print(train_y.tolist().count(0),train_y.tolist().count(1))
-    print(test_y.tolist().count(0), test_y.tolist().count(1))
+                                                            test_size=0.1)
     
-    return torch.tensor(node_idx), train_idx, train_y, test_idx, test_y
+    train_idx,val_idx,train_y,val_y = train_test_split(train_idx, train_y,
+                                                            random_state=415,#415,
+                                                            stratify=train_y, 
+                                                            test_size=0.2)
+    #print(train_y.tolist().count(0),train_y.tolist().count(1))
+    #print(test_y.tolist().count(0), test_y.tolist().count(1))
+    
+    return torch.tensor(node_idx), train_idx, train_y, test_idx, test_y, val_idx, val_y
 
 def get_node_features(colors):
     node_features = pd.get_dummies(colors)
@@ -778,60 +849,76 @@ def mpgnn_train(model, optimizer, data):
     return float(loss)
 
 @torch.no_grad()
+def mpgnn_validation(model, data):
+    model.eval()
+    pred = model(data.x, data.edge_index, data.edge_type)#.argmax(dim=-1)
+    loss_val = F.nll_loss(pred[data.val_idx].squeeze(-1), data.val_y)
+    
+    train_predictions = torch.argmax(pred[data.train_idx], 1).tolist()
+    val_predictions = torch.argmax(pred[data.val_idx], 1).tolist()
+    train_y = data.train_y.tolist()
+    val_y = data.val_y.tolist()
+    # train_acc = (train_predictions == train_y).float().mean()
+    # test_acc = (test_predictions == test_y).float().mean()
+    f1_train = f1_score(train_predictions, train_y, average='micro')
+    f1_val_macro = f1_score(val_predictions, val_y, average = 'macro')
+    f1_val_micro = f1_score(val_predictions, val_y, average = 'micro')
+    return f1_train, f1_val_micro, f1_val_macro,loss_val
+
+@torch.no_grad()
 def mpgnn_test(model, data):
     model.eval()
     pred = model(data.x, data.edge_index, data.edge_type)#.argmax(dim=-1)
     loss_test = F.nll_loss(pred[data.test_idx].squeeze(-1), data.test_y)
     
-    train_predictions = torch.argmax(pred[data.train_idx], 1).tolist()
     test_predictions = torch.argmax(pred[data.test_idx], 1).tolist()
-    train_y = data.train_y.tolist()
     test_y = data.test_y.tolist()
     # train_acc = (train_predictions == train_y).float().mean()
     # test_acc = (test_predictions == test_y).float().mean()
-    f1_train = f1_score(train_predictions, train_y, average='micro')
-    f1_test_macro = f1_score(test_predictions, test_y, average = 'macro')
     f1_test_micro = f1_score(test_predictions, test_y, average = 'micro')
-    return f1_train, f1_test_micro, f1_test_macro,loss_test
+    return loss_test, f1_test_micro
 
-def mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath):
-    metapath=[0, 1, 2]
-    mpgnn_model = MPNet(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapath), metapath)
-    print(mpgnn_model)
-    # for name, param in mpgnn_model.named_parameters():
-    #     print(name, param, param.size())
-    mpgnn_optimizer = torch.optim.Adam(mpgnn_model.parameters(), lr=0.01, weight_decay=0.0005)
-    best_macro, best_micro = 0., 0.
-    for epoch in tqdm(range(1, 100)):
-        loss = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
-        train_acc, f1_test_micro, f1_test_macro = mpgnn_test(mpgnn_model, data_mpgnn)
-        if f1_test_macro > best_macro:
-            best_macro = f1_test_micro
-        if f1_test_micro > best_micro:
-            best_micro = f1_test_micro
-    return best_micro
+# def mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath):
+#     metapath=[0, 1, 2]
+#     mpgnn_model = MPNet(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapath), metapath)
+#     print(mpgnn_model)
+#     # for name, param in mpgnn_model.named_parameters():
+#     #     print(name, param, param.size())
+#     mpgnn_optimizer = torch.optim.Adam(mpgnn_model.parameters(), lr=0.01, weight_decay=0.0005)
+#     best_macro, best_micro = 0., 0.
+#     for epoch in tqdm(range(1, 100)):
+#         loss = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
+#         train_acc, f1_test_micro, f1_test_macro = mpgnn_validation(mpgnn_model, data_mpgnn)
+        
+#         if f1_test_macro > best_macro:
+#             best_macro = f1_test_micro
+#         if f1_test_micro > best_micro:
+#             best_micro = f1_test_micro
+#     return best_micro
 
 def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapaths):
-    #metapaths = [[2, 0]]#, [3, 1]]
+    #metapaths = [[2, 0], [3, 1]] # imdb
     #metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
-    metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
+    #metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
+    print('METAPATHS: ', metapaths)
     mpgnn_model = MPNetm(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapaths), metapaths)
     print(mpgnn_model)
     # for name, param in mpgnn_model.named_parameters():
     #     print(name, param, param.size())
     mpgnn_optimizer = torch.optim.Adam(mpgnn_model.parameters(), lr=0.01, weight_decay=0.0005)
     best_macro, best_micro = 0., 0.
-    for epoch in range(1, 2000):
+    for epoch in range(1, 1000):
         loss = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
-        if epoch % 10 == 0:
-            train_acc, f1_test_micro, f1_test_macro,loss_test = mpgnn_test(mpgnn_model, data_mpgnn)
-            print(epoch, "train loss %0.3f" % loss, "test loss %0.3f" % loss_test,
-                  'train micro: %0.3f'% train_acc, 'test micro: %0.3f'% f1_test_micro)
-            if f1_test_macro > best_macro:
-                best_macro = f1_test_micro
-            if f1_test_micro > best_micro:
-                best_micro = f1_test_micro
-    return best_macro
+        if epoch % 100 == 0:
+            train_acc, f1_val_micro, f1_valt_macro, loss_val = mpgnn_validation(mpgnn_model, data_mpgnn)
+            print(epoch, "train loss %0.3f" % loss, "validation loss %0.3f" % loss_val,
+                  'train micro: %0.3f'% train_acc, 'validation micro: %0.3f'% f1_val_micro)
+            if f1_val_micro > best_micro:
+                best_micro = f1_val_micro
+                best_model = mpgnn_model
+    test_loss, f1_micro_test = mpgnn_test(best_model, data_mpgnn)
+    print("test loss %0.3f" % test_loss, "test micro %0.3f" % f1_micro_test)
+    return f1_micro_test
 
 def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset):
     # Obtain true 0|1 labels for each node, feature matrix (1-hot encoding) and links among nodes
@@ -846,7 +933,8 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
     edge_index, edge_type = get_edge_index_and_type_no_reverse(edges)
 
     # Split data into train and test
-    node_idx, train_idx, train_y, test_idx, test_y = splitting_node_and_labels(true_labels, features, sources, dataset)
+    node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(true_labels, features, sources, dataset)
+    print(len(node_idx))
     #node_idx, train_idx, train_y, test_idx, test_y = splitting_node_and_labels(labels_multi, features, sources, dataset)
 
     # Dataset for MPGNN
@@ -858,6 +946,8 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
     data_mpgnn.test_idx = test_idx
     data_mpgnn.train_y = train_y
     data_mpgnn.test_y = test_y
+    data_mpgnn.val_idx = val_idx
+    data_mpgnn.val_y = val_y
     data_mpgnn.num_nodes = node_idx.size(0)
     # Variables
     if sources:
@@ -876,12 +966,13 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
     data.num_nodes = x.size(0)
     data.bags = torch.empty(1)
     data.bag_labels = torch.empty(1)
-
+    # generate files for gtn
+    gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data)
     # All possible relations
     relations = torch.unique(data.edge_type).tolist()
     mp = []
-    mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, mp)
-    print(mpgnn_f1_micro)
+    #mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, mp)
+    #print(mpgnn_f1_micro)
 
     # comm = MPI.COMM_WORLD
     # rank = comm.Get_rank()
@@ -1130,15 +1221,17 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
 ######################################################################################
 ######################################################################################
 
-
-    metapath = []
-    multiple_metapaths = {}
+    # MPI variables
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
-    # rank = comm.Get_rank()
+    rank = comm.Get_rank()
 
-    # Father process
-    if comm.rank == 0:
+    # metapaths variables
+    current_metapaths_list, current_metapaths_dict = [], {}
+    intermediate_metapaths_list = []
+    final_metapaths_list, final_metapaths_dict = [], {}
+
+    if rank == 0:
         # Dataset for score function
         data = Data()
         data.x = x
@@ -1149,96 +1242,136 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         data.num_nodes = x.size(0)
         data.bags = torch.empty(1)
         data.bag_labels = torch.empty(1)
+        data.source_nodes_mask = source_nodes_mask
 
         # All possible relations
         relations = torch.unique(data.edge_type).tolist()
-        print(" \t\t ITERARION 1 ")
-        for i, element in enumerate(relations):
-            # copy of dataset
-            data_copy = data.clone()
-            # Index of child process 
-            rank = i % (size - 1) + 1
-            comm.send((data_copy, element, source_nodes_mask), dest=rank, tag=0)
-        
-        # Results from child processes
-        results = []
-        for i in range(len(relations)):
-            result = comm.recv()
-            results.append(result)
-        losses = []
-        for r in results:
-                losses.append(r[1])
-                print(r[0], r[1])
-        # calculate  a loss-threshold (we want to keep only relations with the smallest losses
-        # but may be more than one -> multiple meta-paths)
-        threshold = np.mean(losses)
-        best = [item for item in results if item[1] < threshold]
-        for i, element in enumerate(best):
-            # copy of dataset
-            data_mpgnn_copy = data_mpgnn.clone()
-            # Index of child process 
-            rank = i % (size - 1) + 1
-            comm.send((data_mpgnn_copy, element), dest=rank, tag=1)
-        metapaths = []
-        # Results from child processes
-        for i in range(len(best)):
-            tmp = []
-            result = comm.recv()
-            multiple_metapaths[str(best[i][0])] = best[i][1]
-            tmp.append(best[i][1]) # metapath accuracy
-            tmp.append(best[i][2]) # relation edge_dictionary
-            tmp.append(best[i][3]) # relation dest_dictionary
-            multiple_metapaths[str(best[i][0])] = tmp
-            metapaths.append([best[i][0]])
-        # for a in mpgnn_accuracies:
-        #     print('a:', a)
+        actual_relations = node_types_and_connected_relations(data)
     else:
-        # Receive dataset and relation from father process
-        data, element, source_nodes_mask = comm.recv(tag=0)
+        data = None
+        relations = None
+        actual_relations = None
 
-        # Execute the function
-        result = score_relation_parallel(data, element, source_nodes_mask)
+    # Il processo padre invia i dati ai processi figli
+    data = comm.bcast(data, root=0)
+    relations = comm.bcast(relations, root=0)
+    actual_relations = comm.bcast(actual_relations, root=0)
 
-        # Send result to father process
-        comm.send(result, dest=0)
+    # Ogni processo figlio riceve solo una parte della lista graph
+    local_relations = np.array_split(relations, size)[rank]
 
+    # Execute the function
+    result = []
+    for rel in local_relations:
+        partial_result = score_relation_parallel(data, rel, data.source_nodes_mask)
+        result.append(partial_result)
 
-    if comm.rank != 0:
-        # Receive dataset and relation from father process
-        data_mp, element = comm.recv(tag=1)
+    # Ogni processo figlio invia il risultato al processo padre
+    result = comm.gather(result, root=0)
 
-        # run mpgnn
-        mp = []
-        best_relation = element[0]
-        mp.insert(0, best_relation)
-        mpgnn_f1_micro = mpgnn_parallel(data_mp, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, mp)
-        # Send result to father process
-        comm.send((mp, mpgnn_f1_micro), dest=0)
+    if rank == 0:
+        # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
+        final_result = []
+        for list in result:
+            for tuple in list:
+                final_result.append(tuple)
+        for r in final_result:
+            print(r[0], r[1])
+        # print(final_result)
+        # final_result[0][0] -> relation
+        # final_result[0][1] -> loss 
+        # final_result[0][2] -> edge_dictionary
+        # final_result[0][3] -> dest_dictionary
 
+        # calculate  a loss-threshold (we want to keep only relations with the smallest losses
+        # but may be more than one -> multiple meta-paths
+        mean = np.mean([t[1] for t in final_result]) 
+        # take only the relations under the mean threshold (best is a list of tuples)
+        best = [item for item in final_result if item[1] < mean]
+        # save relations in metapaths list
+        for tuple in best:
+            current_metapaths_list.append([tuple[0]])
+            current_metapaths_dict[str([tuple[0]])] = []
+            current_metapaths_dict[str([tuple[0]])].append(tuple[0])
+            current_metapaths_dict[str([tuple[0]])].append(tuple[2])
+            current_metapaths_dict[str([tuple[0]])].append(tuple[3])
+        for i in range(0, len(current_metapaths_list)):
+            mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, [current_metapaths_list[i]])
+            current_metapaths_dict[str(current_metapaths_list[i])].insert(1, mpgnn_f1_micro)
+        # print(current_metapaths_list)
+        # print(current_metapaths_dict)    
 
-    actual_paths = len(metapaths)
+    # send current metapaths list and dict to children
+    current_metapaths_list = comm.bcast(current_metapaths_list, root=0)
+    current_metapaths_dict = comm.bcast(current_metapaths_dict, root=0)
 
-    while metapaths:
-        if comm.rank == 0:
-            tmp_metapath = []
-            results_dict = {}
-            print(" \t\t ITERARION ", idx+2)
-            # Create node bsags
-            create_bags(best_edge_dictionary, best_dest_dictionary, data)
-            for i, element in enumerate(relations):
-                # copy of dataset
-                data_copy = data.clone()
-                # Index of child process 
-                rank = i % (size - 1) + 1
-                comm.send((data_copy, element), dest=rank, tag=2)
-        else:
-            #Receive new information
-            data, element = comm.recv(tag=2)
+    while current_metapaths_list:
+        for i in range(0, len(current_metapaths_list)):
+            if rank == 0:
+                print('current_metapaths: ', current_metapaths_list, ' final_metapaths: ', final_metapaths_list)#, 'meta dict: ', current_metapaths_dict)
+                create_bags(current_metapaths_dict[str(current_metapaths_list[i])][2], current_metapaths_dict[str(current_metapaths_list[i])][3], data)
+            # Il processo padre invia i dati ai processi figli
+            data = comm.bcast(data, root=0)
+            relations = comm.bcast(relations, root=0)
+
+            # Ogni processo figlio riceve solo una parte della lista graph
+            local_relations = np.array_split(relations, size)[rank]
+
             # Execute the function
-            result = score_relation_bags_parallel(data, element)
-            print('I did it')
-            # Send result to father process
-            #comm.send(result, dest=0)
+            result = []
+            for rel in local_relations:
+                partial_result = score_relation_bags_parallel(data, rel)
+                result.append(partial_result)
+
+            # Ogni processo figlio invia il risultato al processo padre
+            result = comm.gather(result, root=0)
+            
+            if rank == 0:
+                bool = False
+                # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
+                final_result = []
+                for list in result:
+                    for tuple in list:
+                        final_result.append(tuple)
+                # relation, loss.item(), model, predictions_for_each_restart
+                for j in range(0, len(final_result)):
+                    #print('relation', final_result[j][0], 'score: ', final_result[j][1])
+                    if final_result[j][1] <= np.mean([t[1] for t in final_result]): #0.01:
+                        tmp_meta = current_metapaths_list[i].copy()
+                        tmp_meta.insert(0, final_result[j][0])
+                        mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, [tmp_meta])
+                        #print('actual meta: ', tmp_meta, 'micro f1: ', mpgnn_f1_micro, 'previous micro: ', current_metapaths_dict[str(current_metapaths_list[i])][0])
+                        if mpgnn_f1_micro > current_metapaths_dict[str(current_metapaths_list[i])][0] and tmp_meta not in intermediate_metapaths_list:
+                            intermediate_metapaths_list.append(tmp_meta)
+                            # retrain bags
+                            predictions_for_each_restart = retrain_bags(data, final_result[j][0], final_result[j][3], BAGS=True)
+                            # relabel nodes into the bags
+                            source_nodes_mask = relabel_nodes_into_bags(predictions_for_each_restart, data, final_result[j][2])
+                            edg_dictionary, dest_dictionary  = create_edge_dictionary(data, final_result[j][0], source_nodes_mask, BAGS=False)
+                            new_edge_dictionary, new_dest_dictionary = clean_dictionaries(data, edg_dictionary, dest_dictionary, final_result[j][2])
+                            current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], final_result[j][1], new_edge_dictionary, new_dest_dictionary]
+                            #print(len(current_metapaths_dict[str(tmp_meta)]))
+                        elif mpgnn_f1_micro < current_metapaths_dict[str(current_metapaths_list[i])][0] and j == len(final_result)-1:
+                            final_metapaths_list.append(current_metapaths_list[i])
+                #print('final_metapath_list: ', final_metapaths_list, 'current meta list: ', current_metapaths_list, 'intermediate: ', intermediate_metapaths_list)
+        if rank == 0:
+            current_metapaths_list = intermediate_metapaths_list.copy()
+        
+
+
+
+
+
+
+    
+
+
+
+        
+
+
+
+
 
 
     
@@ -1338,7 +1471,7 @@ if __name__ == '__main__':
 
     
     EPOCHS = 200
-    COMPLEX = 'synthetic_multi'
+    COMPLEX = 'IMDB'
     RESTARTS = 5
     NEGATIVE_SAMPLING = False
 
@@ -1383,7 +1516,7 @@ if __name__ == '__main__':
     # Define the filename for saving the variables
     pickle_filename = folder + "iteration_variables.pkl"
     # mpgnn variables
-    hidden_dim = 32
+    hidden_dim = 64
     num_rel = tot_rel
     output_dim = 64
 
@@ -1430,8 +1563,3 @@ if __name__ == '__main__':
 #                 t = True
 #         if t == True: correct_positive += 1
 #         else: uncorrect_positive += 1
-
-# correct_positive 
-# uncorrect_positive 
-# correct_negative 
-# uncorrect_negative
