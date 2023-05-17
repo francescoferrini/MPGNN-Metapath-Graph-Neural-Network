@@ -121,44 +121,45 @@ def main(args):
     #####################################
 
     # METAPATH 3 ##################################### 
-    metapath3 = args.metapath3
+    if args.metapath3:
+        metapath3 = args.metapath3
 
-    metapath3_split = metapath3.split('-')
-    metapath3 = ''
-    order_colors3 = []
-    for elm in metapath3_split:
-        if len(elm) == 1: # this is a relation
-            metapath3 = metapath3 + elm
-        else:
-            if elm == 'red':
-                order_colors3.append(0)
-            elif elm == 'blue':
-                order_colors3.append(1)
-            elif elm == 'green':
-                order_colors3.append(2)
-            elif elm == 'purple':
-                order_colors3.append(3)
-            elif elm == 'orange':
-                order_colors3.append(4)
-            elif elm == 'yellow':
-                order_colors3.append(5)
-    colors_dict = {
-        0: 'red',
-        1: 'blue',
-        2: 'green',
-        3: 'purple',
-        4: 'orange',
-        5: 'yelow'
-    }
-    print(metapath3)
-    order_colors3.reverse()
-    print('colors:', order_colors3)
-    metapath3_length = len(metapath3)
-    meta3 = []
-    for i in range(0, metapath3_length):
-        meta3.append(int(metapath3[i]))
-    meta3.reverse()
-    print('metapath1: ', meta3)
+        metapath3_split = metapath3.split('-')
+        metapath3 = ''
+        order_colors3 = []
+        for elm in metapath3_split:
+            if len(elm) == 1: # this is a relation
+                metapath3 = metapath3 + elm
+            else:
+                if elm == 'red':
+                    order_colors3.append(0)
+                elif elm == 'blue':
+                    order_colors3.append(1)
+                elif elm == 'green':
+                    order_colors3.append(2)
+                elif elm == 'purple':
+                    order_colors3.append(3)
+                elif elm == 'orange':
+                    order_colors3.append(4)
+                elif elm == 'yellow':
+                    order_colors3.append(5)
+        colors_dict = {
+            0: 'red',
+            1: 'blue',
+            2: 'green',
+            3: 'purple',
+            4: 'orange',
+            5: 'yelow'
+        }
+        print(metapath3)
+        order_colors3.reverse()
+        print('colors:', order_colors3)
+        metapath3_length = len(metapath3)
+        meta3 = []
+        for i in range(0, metapath3_length):
+            meta3.append(int(metapath3[i]))
+        meta3.reverse()
+        print('metapath1: ', meta3)
 
     #####################################
 
@@ -336,40 +337,41 @@ def main(args):
     label2 = next_embedding
 
     # METAPATH 3 ############################
-    print('metapath 3')
-    for emb_num in range(0, metapath3_length):
-        if emb_num == 0:
-            #print('primo: ', emb_num)
-            print(colors_dict[order_colors3[emb_num+1]], '->', meta3[emb_num], '->', colors_dict[order_colors3[emb_num]])
-            current_embedding = {}
-            for i in range(0, num_nodes):
-                current_embedding[i] = 0               
-            for t in triplets:
-                if colors[t[0]] == order_colors3[emb_num+1] and t[1] == meta3[emb_num] and colors[t[2]] == order_colors3[emb_num]: 
-                        current_embedding[t[0]] = 1
-            embeddings_list.append(current_embedding)
-        elif emb_num == metapath3_length-1:
-            #print('ultimo: ', emb_num)
-            print('+ ->', meta3[emb_num], '->', colors_dict[order_colors3[emb_num]])
-            next_embedding = {}
-            for i in range(0, num_nodes):
-                next_embedding[i] = 0
-            for t in triplets:
-                if t[1] == meta3[emb_num] and colors[t[2]] == order_colors3[emb_num] and current_embedding[t[2]] == 1: 
-                    next_embedding[t[0]] = 1
-            embeddings_list.append(next_embedding)
-        else:
-            #print('intermedio: ', emb_num)
-            print(colors_dict[order_colors3[emb_num+1]], '->', meta3[emb_num], '->', colors_dict[order_colors3[emb_num]])
-            next_embedding = {}
-            for i in range(0, num_nodes):
-                next_embedding[i] = 0
-            for t in triplets:
-                if t[1] == meta3[emb_num] and colors[t[2]] == order_colors3[emb_num] and current_embedding[t[2]] == 1 and colors[t[0]] == order_colors3[emb_num+1]: 
-                    next_embedding[t[0]] = 1
-            current_embedding = next_embedding
-            embeddings_list.append(current_embedding)
-    label3 = next_embedding
+    if args.metapath3:
+        print('metapath 3')
+        for emb_num in range(0, metapath3_length):
+            if emb_num == 0:
+                #print('primo: ', emb_num)
+                print(colors_dict[order_colors3[emb_num+1]], '->', meta3[emb_num], '->', colors_dict[order_colors3[emb_num]])
+                current_embedding = {}
+                for i in range(0, num_nodes):
+                    current_embedding[i] = 0               
+                for t in triplets:
+                    if colors[t[0]] == order_colors3[emb_num+1] and t[1] == meta3[emb_num] and colors[t[2]] == order_colors3[emb_num]: 
+                            current_embedding[t[0]] = 1
+                embeddings_list.append(current_embedding)
+            elif emb_num == metapath3_length-1:
+                #print('ultimo: ', emb_num)
+                print('+ ->', meta3[emb_num], '->', colors_dict[order_colors3[emb_num]])
+                next_embedding = {}
+                for i in range(0, num_nodes):
+                    next_embedding[i] = 0
+                for t in triplets:
+                    if t[1] == meta3[emb_num] and colors[t[2]] == order_colors3[emb_num] and current_embedding[t[2]] == 1: 
+                        next_embedding[t[0]] = 1
+                embeddings_list.append(next_embedding)
+            else:
+                #print('intermedio: ', emb_num)
+                print(colors_dict[order_colors3[emb_num+1]], '->', meta3[emb_num], '->', colors_dict[order_colors3[emb_num]])
+                next_embedding = {}
+                for i in range(0, num_nodes):
+                    next_embedding[i] = 0
+                for t in triplets:
+                    if t[1] == meta3[emb_num] and colors[t[2]] == order_colors3[emb_num] and current_embedding[t[2]] == 1 and colors[t[0]] == order_colors3[emb_num+1]: 
+                        next_embedding[t[0]] = 1
+                current_embedding = next_embedding
+                embeddings_list.append(current_embedding)
+        label3 = next_embedding
     ############################
   
     for l in label1:
@@ -386,20 +388,22 @@ def main(args):
             label2_distribution['+'] += 1
     print(label2_distribution)
 
-    for l in label3:
-        if label3[l] == 0:
-            label3_distribution['-'] += 1
-        else:
-            label3_distribution['+'] += 1
-    print(label3_distribution)
+    if args.metapath3:
+        for l in label3:
+            if label3[l] == 0:
+                label3_distribution['-'] += 1
+            else:
+                label3_distribution['+'] += 1
+        print(label3_distribution)
 
     for k, v in label2.items():
         if v == 1:
             label1[k] = 1
 
-    for k, v in label3.items():
-        if v == 1:
-            label1[k] = 1 
+    if args.metapath3:
+        for k, v in label3.items():
+            if v == 1:
+                label1[k] = 1 
 
     for l in label1:
         if label1[l] == 0:

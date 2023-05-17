@@ -7,7 +7,7 @@ import random
 import numpy as np
 
 
-FEATURES_DIM = 6#4615#3066
+FEATURES_DIM = 4231#3066#6##
 
 class InputLayer(torch.nn.Module):
     def __init__(self, weights):
@@ -229,8 +229,8 @@ class MPNetm(torch.nn.Module):
         self.log_softmax = torch.nn.LogSoftmax(dim=1)
         #self.softmax = torch.nn.Softmax(dim=1)
 
-        #self.dropout1 = nn.Dropout(0.25)
-        #self.dropout2 = nn.Dropout(0.25) #togli p
+        self.dropout1 = nn.Dropout(0.5)
+        self.dropout2 = nn.Dropout(0.5) #togli p
 
     def forward(self, x, edge_index, edge_type):
         embeddings = []
@@ -239,10 +239,10 @@ class MPNetm(torch.nn.Module):
             for layer_index in range(0, len(self.metapaths[i])):
                 if layer_index == 0:
                     h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], x, edge_index, edge_type))
-                    #h = self.dropout1(h)
+                    h = self.dropout1(h)
                 else:
                     h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], h, edge_index, edge_type))
-                    #h = self.dropout2(h)
+                    h = self.dropout2(h)
             embeddings.append(h)
 
         #for e in embeddings:
