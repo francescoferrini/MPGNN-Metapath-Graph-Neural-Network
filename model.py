@@ -7,13 +7,14 @@ import random
 import numpy as np
 
 
-FEATURES_DIM = 4231#3066#6##
+FEATURES_DIM = 6#4231#3066#6##
 
 class InputLayer(torch.nn.Module):
     def __init__(self, weights):
         super(InputLayer, self).__init__()
         # Trainable weights
         self.weights = nn.Parameter(weights.unsqueeze(-1))
+        #self.weights = nn.Parameter(torch.rand(len(weights)).unsqueeze(-1))
         #self.weights = nn.ParameterList([nn.Parameter(weights[i]) for i in range(weights.shape[0])])
     def forward(self):
         return self.weights
@@ -34,11 +35,9 @@ class OutputLayer(torch.nn.Module):
         # if BAGS == true means the model is predicting the bags
         # otherwise it is predicting each single source node
         if BAGS:
-            # retrieve data from data object
-            bags = data.bags
             # Tensor to save the max destination weight for each bag.
             # The size of the tensor is the total number of bags
-            max_weights = torch.zeros(len(bags), 1)
+            max_weights = torch.zeros(len(data.bags), 1)
 
             # dictionary of max destination nodes (keys are bags as strings since it is not possible to have
             # lists as keys of a dictionary)
@@ -47,36 +46,35 @@ class OutputLayer(torch.nn.Module):
             max_destination_node_for_source = {}
             # max destination nodes
             max_destination_nodes = []
-            for i in range(0, len(bags)):
+            for i, bag in enumerate(data.bags):
                 max_weight_for_current_bag = -10
-                for source_node in bags[i]:
+                for source_node in bag:
                     if source_node in node_dict:
                         # retrieve weights of nodes connected to source_node
                         weights_of_source = weights[node_dict[source_node]].squeeze(-1)
-                        #weights_of_source = [weights[i] for i in node_dict[source_node]]
+                        #print('----')
+                        #print('weights of source: ', weights_of_source.tolist())
                         # If we are in the complex case, multiply with the linear layer of the features
-                        if COMPLEX:
-                            weights_of_source = torch.mul(weights_of_source, self.LinearLayerAttri(feat[source_node]))
-                            #weights_of_source = [i * self.LinearLayerAttri(feat[source_node]) for i in weights_of_source]
-                        # retrive the index of the max weight (may be more than one, in this case I use one of them)
-                        #index_max_destination_node = weights_of_source.index(max(weights_of_source))
-                        #index_max_destination_node = random.choice((weights_of_source == torch.max(weights_of_source)).nonzero(as_tuple=True)[0].tolist())
-                        # retrive the node with this weight and put in list
+                        weights_of_source *= self.LinearLayerAttri(feat[source_node])
+                        #print('linear : ', self.LinearLayerAttri.weight.tolist())
+                        #print('feat: ', feat[source_node])
+                        #print('linear*feat: ', self.LinearLayerAttri(feat[source_node]))
+                        #print('weights of source: ', weights_of_source.tolist())
+                        #print('index: ', torch.argmax(weights_of_source).item())
                         max_node = node_dict[source_node][torch.argmax(weights_of_source).item()]   
                         # retrieve the max weight for the source_node in the bag
-                        #max_destination_node_for_source[source_node] = torch.mul(weights[max_node], torch.dot(torch.tensor([0., 0., 1., 0., 0., 0.]), feat[source_node]))
-                        max_destination_node_for_source[source_node] = torch.mul(weights[max_node], self.LinearLayerAttri(feat[source_node]))
+                        max_destination_node_for_source[source_node] = weights[max_node]*self.LinearLayerAttri(feat[source_node])
                         if max_node not in max_destination_nodes: max_destination_nodes.append(max_node)
                         # put in max_node_for_current_bag the max node so far for this bag
                         if max_destination_node_for_source[source_node] > max_weight_for_current_bag: 
                             max_weight_for_current_bag = max_destination_node_for_source[source_node]
-                            max_destination_node_for_bag[str(bags[i])] = max_node
+                            max_destination_node_for_bag[str(bag)] = max_node
                             max_weights[i] = max_destination_node_for_source[source_node]
             max_weights.requires_grad_(True)
             return max_weights, max_destination_node_for_bag, max_destination_node_for_source
             #return max_weights,  max_destination_node_for_source_no_weight, max_destination_node_for_source
             
-        else:     
+        else:
             # Retrieve data from data object
             source_nodes, num_nodes = list(node_dict.keys()), data.num_nodes
             # Tensor for saving the max destination weight for each source node. 
@@ -87,23 +85,10 @@ class OutputLayer(torch.nn.Module):
             for source_node in source_nodes:
                 #Get the subset of parameters using PyTorch indexing
                 weights_of_source = weights[node_dict[source_node]].squeeze(-1)
-                #weights_of_source = [weights[i] for i in node_dict[source_node]]
-                # Concatenate the subset of parameters into a new tensor
-                # retrieve weights of nodes connected to source_node
-                #weights_of_source = weights[node_dict[source_node]].squeeze(-1)
-                # retrive the index of the max weight (may be more than one, in this case I use one of the 2)
-                #index_max_destination_node = random.choice((weights_of_source == torch.max(weights_of_source)).nonzero(as_tuple=True)[0].tolist())
-                #index_max_destination_node = weights_of_source.index(max(weights_of_source))
-                # retrive the node with this weight and put in a dictionary
                 max_node = node_dict[source_node][torch.argmax(weights_of_source).item()]
                 max_destination_node_for_source[source_node] = max_node
-                # max_destination_node_for_source[source_node] = torch.mul(weights[max_node],self.LinearLayerAttri(feat[source_node]))
-                # update max_weight tensor
-
-                #max_weights[source_node] = torch.max(weights[node_dict[source_node]].squeeze(-1))
                 max_weights[source_node] = weights[max_node]
             max_weights.requires_grad_(True)
-                #max_weights[source_node] = torch.mul(weights[max_node],self.LinearLayerAttri(feat[source_node]))
         return max_weights, max_destination_node_for_source, max_destination_node_for_source
 
 
@@ -229,20 +214,20 @@ class MPNetm(torch.nn.Module):
         self.log_softmax = torch.nn.LogSoftmax(dim=1)
         #self.softmax = torch.nn.Softmax(dim=1)
 
-        self.dropout1 = nn.Dropout(0.5)
-        self.dropout2 = nn.Dropout(0.5) #togli p
+        #self.dropout1 = nn.Dropout(0.5)
+        #self.dropout2 = nn.Dropout(0.5) #togli p
 
     def forward(self, x, edge_index, edge_type):
+        
         embeddings = []
-        sum = 0
         for i in range(0, len(self.metapaths)):
             for layer_index in range(0, len(self.metapaths[i])):
                 if layer_index == 0:
                     h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], x, edge_index, edge_type))
-                    h = self.dropout1(h)
+                    #h = self.dropout1(h)
                 else:
                     h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], h, edge_index, edge_type))
-                    h = self.dropout2(h)
+                    #h = self.dropout2(h)
             embeddings.append(h)
 
         #for e in embeddings:
@@ -252,8 +237,82 @@ class MPNetm(torch.nn.Module):
 
         #print(concatenated_embedding)
         h = F.relu(self.fc1(concatenated_embedding))
-        h = F.relu(self.fc2(h))
+        #h = F.relu(self.fc2(h))
+        h = self.fc2(h)
         h = self.log_softmax(h)
         return h
+
+
+
+
+'''
+            # Retrieve data from data object
+            source_nodes, num_nodes = list(node_dict.keys()), data.num_nodes
+            # Tensor for saving the max destination weight for each source node. 
+            # The size of the tensor is the total number of nodes
+            max_weights =  torch.zeros(num_nodes, 1)
+            # dictionary of max destination nodes (keys are source nodes)
+            max_destination_node_for_source = {}
+            for source_node in source_nodes:
+                #Get the subset of parameters using PyTorch indexing
+                weights_of_source = weights[node_dict[source_node]].squeeze(-1)
+                #weights_of_source = [weights[i] for i in node_dict[source_node]]
+                # Concatenate the subset of parameters into a new tensor
+                # retrieve weights of nodes connected to source_node
+                #weights_of_source = weights[node_dict[source_node]].squeeze(-1)
+                # retrive the index of the max weight (may be more than one, in this case I use one of the 2)
+                #index_max_destination_node = random.choice((weights_of_source == torch.max(weights_of_source)).nonzero(as_tuple=True)[0].tolist())
+                #index_max_destination_node = weights_of_source.index(max(weights_of_source))
+                # retrive the node with this weight and put in a dictionary
+                max_node = node_dict[source_node][torch.argmax(weights_of_source).item()]
+                max_destination_node_for_source[source_node] = max_node
+                # max_destination_node_for_source[source_node] = torch.mul(weights[max_node],self.LinearLayerAttri(feat[source_node]))
+                # update max_weight tensor
+
+                #max_weights[source_node] = torch.max(weights[node_dict[source_node]].squeeze(-1))
+                max_weights[source_node] = weights[max_node]
+            max_weights.requires_grad_(True)
+                #max_weights[source_node] = torch.mul(weights[max_node],self.LinearLayerAttri(feat[source_node]))
+'''
+'''
+# retrieve data from data object
+            bags = data.bags
+            # Tensor to save the max destination weight for each bag.
+            # The size of the tensor is the total number of bags
+            max_weights = torch.zeros(len(bags), 1)
+
+            # dictionary of max destination nodes (keys are bags as strings since it is not possible to have
+            # lists as keys of a dictionary)
+            max_destination_node_for_bag = {}
+            # dictionary of max destination nodes (keys are source nodes)
+            max_destination_node_for_source = {}
+            # max destination nodes
+            max_destination_nodes = []
+            for i in range(0, len(bags)):
+                max_weight_for_current_bag = -10
+                for source_node in bags[i]:
+                    if source_node in node_dict:
+                        # retrieve weights of nodes connected to source_node
+                        weights_of_source = weights[node_dict[source_node]].squeeze(-1)
+                        #weights_of_source = [weights[i] for i in node_dict[source_node]]
+                        # If we are in the complex case, multiply with the linear layer of the features
+                        if COMPLEX:
+                            weights_of_source = torch.mul(weights_of_source, self.LinearLayerAttri(feat[source_node]))
+                            #weights_of_source = [i * self.LinearLayerAttri(feat[source_node]) for i in weights_of_source]
+                        # retrive the index of the max weight (may be more than one, in this case I use one of them)
+                        #index_max_destination_node = weights_of_source.index(max(weights_of_source))
+                        #index_max_destination_node = random.choice((weights_of_source == torch.max(weights_of_source)).nonzero(as_tuple=True)[0].tolist())
+                        # retrive the node with this weight and put in list
+                        max_node = node_dict[source_node][torch.argmax(weights_of_source).item()]   
+                        # retrieve the max weight for the source_node in the bag
+                        #max_destination_node_for_source[source_node] = torch.mul(weights[max_node], torch.dot(torch.tensor([0., 0., 1., 0., 0., 0.]), feat[source_node]))
+                        max_destination_node_for_source[source_node] = torch.mul(weights[max_node], self.LinearLayerAttri(feat[source_node]))
+                        if max_node not in max_destination_nodes: max_destination_nodes.append(max_node)
+                        # put in max_node_for_current_bag the max node so far for this bag
+                        if max_destination_node_for_source[source_node] > max_weight_for_current_bag: 
+                            max_weight_for_current_bag = max_destination_node_for_source[source_node]
+                            max_destination_node_for_bag[str(bags[i])] = max_node
+                            max_weights[i] = max_destination_node_for_source[source_node]
+            max_weights.requires_grad_(True)'''
 
 

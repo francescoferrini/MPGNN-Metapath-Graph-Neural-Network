@@ -22,8 +22,11 @@ from functools import partial
 import multiprocess as mp
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.cluster import KMeans
+from sklearn.utils import class_weight
 
 from mpi4py import MPI
+from sklearn.cluster import DBSCAN
+from imblearn.under_sampling import RandomUnderSampler
 
 seed= 10
 torch.manual_seed(seed)
@@ -46,13 +49,75 @@ def one_hot_encoding(l):
         new_labels.append(tmp)
     return torch.tensor(new_labels)     
 
-def node_types_and_connected_relations(data):
+def node_types_and_connected_relations(data, BAGS):
     rels = []
-    for i in range(0, len(data.edge_type)):
-        if data.edge_index[0][i].item() in data.source_nodes_mask:
-            if data.edge_type[i].item() not in rels: rels.append(data.edge_type[i].item())
+    if BAGS:
+        s = list(set(sum(data.bags, [])))
+        for i in range(0, len(data.edge_type)):
+            if data.edge_index[0][i].item() in s:
+                if data.edge_type[i].item() not in rels: rels.append(data.edge_type[i].item())
+    else:
+        for i in range(0, len(data.edge_type)):
+            if data.edge_index[0][i].item() in data.source_nodes_mask:
+                if data.edge_type[i].item() not in rels: rels.append(data.edge_type[i].item())
+    if not data.source_nodes_mask:
+        rels = torch.unique(data.edge_type).tolist()
     return rels
     
+def load_files_fb15k237(node_file_path, link_file_path, label_file_path, dataset):
+    colors = pd.read_csv(node_file_path, sep='\t', header = None)
+    colors = colors.dropna(axis=1,how='all')
+    labels = pd.read_csv(label_file_path, sep='\t', header = None)
+    links = pd.read_csv(link_file_path, sep='\t', header = None)
+    labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
+    source_nodes_with_labels = labels['node'].values.tolist()
+    labels = torch.tensor(labels['label'].values)
+    colors.rename(columns = {0: 'node', 1: 'color'}, inplace = True)
+    links.rename(columns = {0: 'node_1', 1: 'relation_type', 2: 'node_2'}, inplace = True)
+    num_relations = len(list(set(links['relation_type'].to_list())))
+    new_l = []
+    for i in range(0, len(labels)):
+        if labels[i].item() == 1:
+            new_l.append(1)
+        else:
+            new_l.append(0)
+    new_l = torch.tensor(new_l)
+    return labels, colors, links, source_nodes_with_labels, num_relations, new_l
+
+def load_files_dblp(node_file_path, link_file_path):
+
+    colors = pd.read_csv(node_file_path, sep='\t', header = None)
+    colors = colors.dropna(axis=1,how='all')
+
+    train_labels = pd.read_csv('/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_train.dat', sep='\t', header = None)
+    train_labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
+    val_labels = pd.read_csv('/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_val.dat', sep='\t', header = None)
+    val_labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
+    test_labels = pd.read_csv('/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_test.dat', sep='\t', header = None)
+    test_labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
+    labels = pd.concat([train_labels, val_labels, test_labels], ignore_index=True)
+    links = pd.read_csv(link_file_path, sep='\t', header = None)
+    labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
+    source_nodes_with_labels = labels['node'].values.tolist()
+    labels = torch.tensor(labels['label'].values)
+    colors.rename(columns = {0: 'node', 1: 'color'}, inplace = True)
+    links.rename(columns = {0: 'node_1', 1: 'relation_type', 2: 'node_2'}, inplace = True)
+    num_relations = len(list(set(links['relation_type'].to_list())))
+    new_l = []
+    for i in range(0, len(labels)):
+        if labels[i].item() == 1:
+            new_l.append(1)
+        else:
+            new_l.append(0)
+    new_l = torch.tensor(new_l)
+
+    train_idx = train_labels['node'].values.tolist()
+    train_y = torch.tensor(train_labels['label'].values.tolist())
+    val_idx = val_labels['node'].values.tolist()
+    val_y = torch.tensor(val_labels['label'].values.tolist())
+    test_idx = test_labels['node'].values.tolist()
+    test_y = torch.tensor(test_labels['label'].values.tolist())
+    return labels, colors, links, source_nodes_with_labels, num_relations, new_l, train_idx, train_y, val_idx, val_y, test_idx, test_y
 
 def load_files(node_file_path, links_file_path, label_file_path, embedding_file_path, dataset):
     colors = pd.read_csv(node_file_path, sep='\t', header = None)
@@ -80,12 +145,11 @@ def load_files(node_file_path, links_file_path, label_file_path, embedding_file_
         labels_multi  = one_hot_encoding(labels)
         new_l = []
         for i in range(0, len(labels)):
-            if labels[i].item() == 0:
+            if labels[i].item() == 1:
                 new_l.append(1)
             else:
                 new_l.append(0)
         new_l = torch.tensor(new_l)
-        print(new_l)
         return labels, colors, links, source_nodes_with_labels, new_l
     
 def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data):
@@ -143,9 +207,6 @@ def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, da
 
 
 
-
-
-
 # def splitting_node_and_labels(lab, feat, src, dataset):
 #     if dataset == 'complex' or dataset == 'simple':
 #         node_idx = torch.tensor(feat['node'].values)
@@ -160,24 +221,97 @@ def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, da
 #     test_y = lab[-test_split:]
 #     return node_idx, train_idx, train_y, test_idx, test_y
 
+def find_unique_indices(nums):
+    count = {}
+    unique_indices = []
+    
+    # Conta l'occorrenza di ogni intero nella lista
+    for i, num in enumerate(nums):
+        if num in count:
+            count[num][0] += 1
+        else:
+            count[num] = [1, i]
+    
+    # Aggiungi gli indici degli interi che compaiono una sola volta alla lista di indici unici
+    for num, (occurrence, index) in count.items():
+        if occurrence == 1:
+            unique_indices.append(index)
+    
+    return unique_indices
+
+def rimuovi_e_aggiungi_elementi(lista_elementi, lista_indici, tensor):
+    elementi_rimossi = [lista_elementi.pop(indice) for indice in sorted(lista_indici, reverse=True)]
+    if tensor == True: lista_elementi=torch.tensor(lista_elementi)
+    return lista_elementi, elementi_rimossi
+
 def splitting_node_and_labels(lab, feat, src, dataset):
     if dataset == 'complex' or dataset == 'simple' or dataset == 'synthetic_multiple':
         node_idx = list(feat['node'].values)
     else:
         node_idx = src.copy()
+    # alcune classi potrebbero avere un solo elemento dunque tolgo i nodi associati e li inserisco successivaemnte
+    # indici delle classi con un solo elemento
+    unique_indices = find_unique_indices(lab.tolist())
+    # rimuovo gli indici appena trovati da node_idx e lab
+    if unique_indices:
 
+        node_idx, nodes_removed = rimuovi_e_aggiungi_elementi(node_idx, unique_indices, tensor=False)
+        lab, lab_removed = rimuovi_e_aggiungi_elementi(lab.tolist(), unique_indices, tensor=False)
+
+    # splitto senza considerare gli elementi di una sola classe
     train_idx,test_idx,train_y,test_y = train_test_split(node_idx, lab,
-                                                            random_state=415,#415,
+                                                            random_state=415,
                                                             stratify=lab, 
                                                             test_size=0.1)
     
     train_idx,val_idx,train_y,val_y = train_test_split(train_idx, train_y,
-                                                            random_state=415,#415,
+                                                            random_state=415,
                                                             stratify=train_y, 
                                                             test_size=0.2)
-    #print(train_y.tolist().count(0),train_y.tolist().count(1))
-    #print(test_y.tolist().count(0), test_y.tolist().count(1))
-    
+
+    if unique_indices:
+        train_idx.extend(nodes_removed)
+        train_y.extend(lab_removed)
+        return torch.tensor(node_idx), train_idx, torch.tensor(train_y), test_idx, torch.tensor(test_y), val_idx, torch.tensor(val_y)
+    v = False
+    if v == True:
+        # Creazione di un array numpy per i nodi nel training set
+        train_nodes = np.array(train_idx)
+
+        # Creazione di un array numpy per le etichette
+        labels = np.array(train_y)
+
+        # Ottenere gli indici unici presenti nella lista train_nodes
+        unique_nodes = np.unique(train_nodes)
+
+        # Creazione di un array booleano indicando i nodi nel training set
+        train_mask = np.isin(unique_nodes, train_nodes)
+
+        # Estrazione delle etichette corrispondenti ai nodi nel training set
+        train_labels = labels[train_mask]
+
+        # Calcolo del numero di campioni in ciascuna classe
+        class_counts = np.bincount(train_labels)
+
+        # Calcolo del numero minimo di campioni tra tutte le classi
+        num_campioni_minimo = np.min(class_counts)
+
+        # Impostazione della strategia di campionamento per ottenere lo stesso numero di campioni per tutte le classi
+        undersampling_strategy = {i: num_campioni_minimo for i in range(len(class_counts))}
+
+        # Esecuzione dell'undersampling con la strategia personalizzata
+        undersampler = RandomUnderSampler(sampling_strategy=undersampling_strategy, random_state=42)
+        train_nodes_resampled, train_y = undersampler.fit_resample(unique_nodes.reshape(-1, 1), train_labels)
+
+        # Stampa del numero di campioni per ciascuna classe dopo l'undersampling
+        class_counts_resampled = np.bincount(train_y)
+        for i, count in enumerate(class_counts_resampled):
+            print(f"Numero di campioni nella classe {i} dopo l'undersampling:", count)
+
+        # Creazione della lista finale degli indici
+        final_train_idx = [i[0] for i in train_nodes_resampled]
+        print(final_train_idx, torch.tensor(train_y))
+        return torch.tensor(node_idx), torch.tensor(final_train_idx), torch.tensor(train_y), test_idx, test_y, val_idx, val_y
     return torch.tensor(node_idx), train_idx, train_y, test_idx, test_y, val_idx, val_y
 
 def get_node_features(colors):
@@ -189,6 +323,14 @@ def get_node_features(colors):
     x = np.flip(x, 1).copy()
     x = torch.from_numpy(x) 
     return x
+
+def mask_features_test_nodes(test_index, val_index, feature_matrix):
+    for indice in test_index:
+        feature_matrix[indice] = torch.zeros_like(feature_matrix[indice])
+    for indice in val_index:
+        feature_matrix[indice] = torch.zeros_like(feature_matrix[indice])
+    return feature_matrix
+
 
 def get_edge_index_and_type_no_reverse(links):
     edge_index = links.drop(['relation_type'], axis=1)
@@ -245,6 +387,7 @@ def create_edge_dictionary(data, relation, source_nodes_mask, BAGS):
         for src, dst in zip(edge_index[0], edge_index[1]):
             if src.item() in source_nodes_mask:
                 destination_dictionary[dst.item()].append(data.labels[src.item()].item())
+                #destination_dictionary[dst.item()].append(data.labels[source_nodes_mask.index(src.item())].item())
         return edge_dictionary_copy, destination_dictionary
     
     else:       
@@ -260,7 +403,6 @@ def create_edge_dictionary(data, relation, source_nodes_mask, BAGS):
                 if dst.item() not in destination_bag_dictionary: destination_bag_dictionary[dst.item()] = []
                 destination_bag_dictionary[dst.item()].extend(tmp_dict[src.item()])
         return edge_dictionary_copy, destination_bag_dictionary
-    
 
 def create_destination_labels_dictionary(data, relation, source_nodes_mask):
     '''
@@ -313,8 +455,8 @@ def initialize_weights(data, destination_dictionary, BAGS):
     #     end = 1.2
     #     for idx in range(0, len(weights)):
     #         weights[idx] = random.uniform(start, end)
-    start = - 0.3
-    end = 0.3
+    start = - 0.2
+    end = 0.2
     for key, values in destination_dictionary.items():
         weights[key] = abs(min(values) + random.uniform(start, end))
         #weights[key] = random.uniform(0., 1.2)
@@ -329,14 +471,14 @@ def reinitialize_weights(data, destination_dictionary, previous_weights, destina
     #     for idx in range(0, len(weights)):
     #         weights[idx] = random.uniform(start, end)
     # else:
-    start = -0.4
-    end = 0.4
+    start = - 0.3
+    end = 0.3
     for key, values in destination_dictionary.items():
         if key in destination_nodes_with_freezed_weights:
             weights[key] = previous_weights[key]
         else:
-            #weights[key] = abs(min(values) + random.uniform(start, end))
             weights[key] = random.uniform(0., 1.)
+            #weights[key] = abs(min(values) + random.uniform(start, end))
             #weights[key] = np.random.normal(mu, sigma)
     return weights
 
@@ -368,14 +510,15 @@ def retrieve_destinations_low_loss(max_destination_node_dict, loss_per_node, sou
     return max_destinations
 
 def create_bags(edg_dictionary, dest_dictionary, data):
-    print('creo bags')
+    #print('creo bags', edg_dictionary[5], dest_dictionary[314], dest_dictionary[3768])
+    #print(dest_dictionary)
     bag = []
     labels = []
     for key in edg_dictionary.keys():
         list = []
         for value in edg_dictionary[key]:
             if min(dest_dictionary[value]) > 0.9:
-                    list.append(value)
+                list.append(value)
             else: 
                 if [value] not in bag:
                     bag.append([value])
@@ -392,8 +535,13 @@ def create_bags(edg_dictionary, dest_dictionary, data):
             new_bag.append(bag[idx])
             new_labels.append(labels[idx])
         
-    data.bags = new_bag
+    data.bags = new_bag.copy()
     data.bag_labels = torch.Tensor(new_labels).unsqueeze(-1)
+    #print(new_labels.count(1))
+    #for i, elm in enumerate(data.bags):
+    #    if data.bag_labels[i].item() == 1:
+    #        print(elm, data.bag_labels[i])
+    #print('len bags: ', len(data.bags))
 
 def clean_bags_for_relation_type(data, edge_dictionary): 
     to_keep = []
@@ -412,7 +560,7 @@ def clean_bags_for_relation_type(data, edge_dictionary):
     #data.bag_labels = torch.Tensor(to_keep_labels).unsqueeze(-1)
     return to_keep, torch.Tensor(to_keep_labels).unsqueeze(-1)
 
-def relabel_nodes_into_bags(predictions_for_each_restart, data, mod):
+def relabel_nodes_inside_bags(predictions_for_each_restart, data, mod):
     # if a node into the bags is predicted as 1 at least one time, then his label willl be 1 otherwise 0
     data.labels = torch.zeros(data.num_nodes, 1)
     for k, v in predictions_for_each_restart.items():
@@ -420,6 +568,8 @@ def relabel_nodes_into_bags(predictions_for_each_restart, data, mod):
         for w in v:
             if w > 0.9:
                 data.labels[k] = 1
+    #for name, param in mod.named_parameters():
+    #    print(name, param)
     # delete from source mask, nodes that have a color value similar to zero (a zero in the linear layer)
     
     src = list(predictions_for_each_restart.keys())
@@ -434,18 +584,24 @@ def relabel_nodes_into_bags(predictions_for_each_restart, data, mod):
     
 def freeze_weights(model, destination_nodes_with_freezed_weights, previous_weights):
     with torch.no_grad():
-        for idx in range(0, len(model.weights())):
-            if idx in destination_nodes_with_freezed_weights: model.weights()[idx].requires_grad=False# = previous_weights[idx]
+        for idx in range(0, len(model.input.weights())):
+            if idx in destination_nodes_with_freezed_weights: model.input.weights()[idx] = previous_weights[idx]
 
-def train(data, edge_dictionary, model, optimizer, criterion, source_nodes_mask, criterion_per_node, destination_nodes_with_freezed_weights, previous_weights, grad_mask, BAGS):
+def train(data, edge_dictionary, model, optimizer, criterion, source_nodes_mask, criterion_per_node, destination_nodes_with_freezed_weights, previous_weights, grad_mask, BAGS, bags_to_predict, bags_to_predict_labels):
     model.train()
     optimizer.zero_grad()
-    predictions, max_destination_node_for_bag, max_destination_node_for_source = model(data, edge_dictionary, BAGS)
-    if not BAGS:
+    if BAGS:
+        current_data = data.clone()
+        current_data.bags = bags_to_predict
+        predictions, max_destination_node_for_bag, max_destination_node_for_source = model(current_data, edge_dictionary, BAGS)
+        labels = bags_to_predict_labels
+        #labels = data.bag_labels
+    else:
+        predictions, max_destination_node_for_bag, max_destination_node_for_source = model(data, edge_dictionary, BAGS)
         labels = data.labels
         predictions, labels = predictions[source_nodes_mask].to(torch.float32), labels[source_nodes_mask].to(torch.float32)
-    else:
-        labels = data.bag_labels
+        #predictions, labels = predictions[source_nodes_mask].to(torch.float32), labels.to(torch.float32)
+      
     loss = criterion(predictions, labels)
     loss_per_node = criterion_per_node(predictions, labels)
     loss.backward()
@@ -455,23 +611,11 @@ def train(data, edge_dictionary, model, optimizer, criterion, source_nodes_mask,
     optimizer.step()
 
     with torch.no_grad():
-        model.input.weights[:] = torch.clamp(model.input.weights, min = 0.0)
-        model.output.LinearLayerAttri.weight[:] = torch.clamp(model.output.LinearLayerAttri.weight, min = 0.0)
-    # with torch.no_grad():
-    #     for i in range(0, len(model.input.weights)):
-    #         model.input.weights[i].clamp_min_(0)
-    #     #model.input.weights[:] = torch.clamp(model.input.weights, min = 0.0)
-    #     model.output.LinearLayerAttri.weight[:] = torch.clamp(model.output.LinearLayerAttri.weight, min = 0.0)
-
-    # if we have freezed weights of some destination node in the previous iteration 
-    # than we restore the weights as they were before
-    # if destination_nodes_with_freezed_weights:
-    #     model.frz_weights(destination_nodes_with_freezed_weights)
-
-    #     for i, param in enumerate(model.weights.parameters()):
-    #         if i in destination_nodes_with_freezed_weights:
-    #             assert not param.requires_grad, f"Weight at index {i} is not frozen"
-        #freeze_weights(model, destination_nodes_with_freezed_weights, previous_weights)
+        model.input.weights[:] = torch.clamp(model.input.weights, min = 0.0, max = 1.0)
+        model.output.LinearLayerAttri.weight[:] = torch.clamp(model.output.LinearLayerAttri.weight, min = 0.0, max = 1.0)
+        if destination_nodes_with_freezed_weights:
+            for idx in range(0, len(model.input.weights[:])):
+                if idx in destination_nodes_with_freezed_weights: model.input.weights[:][idx] = previous_weights[idx] 
     return loss, max_destination_node_for_source, loss_per_node, max_destination_node_for_bag, predictions
 
 def retrain(data, source_nodes_mask, relation, BAGS):
@@ -526,17 +670,18 @@ def retrain(data, source_nodes_mask, relation, BAGS):
         #     print(n, p)
     return destination_nodes_with_freezed_weights, model
 
-def score_relation_parallel(data, relation, source_nodes_mask):
-    if not source_nodes_mask:
+def score_relation_parallel(data, relation, source_nodes):
+    if not source_nodes:
         first = True
     else:
         first = False
     # All source nodes with relation type 'relation' are considered (first iteration)
     if first:
-        source_nodes_mask = masked_edge_index(data.edge_index, data.edge_type == relation)
-        source_nodes_mask = torch.unique(source_nodes_mask[0]).tolist()
+        source_nodes = masked_edge_index(data.edge_index, data.edge_type == relation)
+        source_nodes = torch.unique(source_nodes[0]).tolist()
     # Create dictionary of source and destinaiton nodes connected with a specific relation type
-    edge_dictionary, destination_dictionary = create_edge_dictionary(data, relation, source_nodes_mask, BAGS=False)
+    edge_dictionary, destination_dictionary = create_edge_dictionary(data, relation, source_nodes, BAGS=False)
+    #print('relation', relation, destination_dictionary)
     # Create dictionary of destination nodes and their specific source labels
     #destination_dictionary = create_destination_labels_dictionary(data, relation, source_nodes_mask)
 
@@ -554,9 +699,10 @@ def score_relation_parallel(data, relation, source_nodes_mask):
 
     # Training
     EPOCHS = 100
-    for epoch in tqdm(range(0, EPOCHS)):
-        loss, max_destination_node_for_source, loss_per_node, max_destination_node_for_bag, predictions = train(data, edge_dictionary, model, optimizer, criterion, source_nodes_mask, criterion_per_node, [], weights, torch.tensor(0), BAGS=False)
-
+    #for epoch in tqdm(range(0, EPOCHS)):
+    for epoch in range(0, EPOCHS):
+        loss, max_destination_node_for_source, loss_per_node, max_destination_node_for_bag, predictions = train(data, edge_dictionary, model, optimizer, criterion, source_nodes, criterion_per_node, [], weights, torch.tensor(0), BAGS=False, bags_to_predict=None, bags_to_predict_labels=None)
+        #print(relation, loss)
     return relation, loss.item(), edge_dictionary, destination_dictionary
                     
 def score_relations(data, source_nodes_mask, BAGS):
@@ -622,7 +768,7 @@ def retrain_bags(data, relation, best_pred_for_each_restart, BAGS):
     edge_dictionary, destination_dictionary = create_edge_dictionary(data, relation, source_nodes_mask, BAGS=True)
     # Create dictionary of destination nodes and their specific source labels
     #estination_dictionary = create_destination_labels_dictionary(data, relation, source_nodes_mask)
-
+    bags, bag_labels = clean_bags_for_relation_type(data, edge_dictionary)
     # Initialize weights
     weights = initialize_weights(data, destination_dictionary, BAGS=True)
 
@@ -639,8 +785,8 @@ def retrain_bags(data, relation, best_pred_for_each_restart, BAGS):
         # Retrieve optimizer
         optimizer = get_optimizer(model)
         # Training
-        for epoch in tqdm(range(0, EPOCHS)):
-            loss, max_destination_node_for_source, loss_per_bag, max_destination_node_for_bag, predictions = train(data, edge_dictionary, model, optimizer, criterion, source_nodes_mask, criterion_per_node, destination_nodes_with_freezed_weights, weights, torch.tensor(0), BAGS)
+        for epoch in range(0, EPOCHS):
+            loss, max_destination_node_for_source, loss_per_bag, max_destination_node_for_bag, predictions = train(data, edge_dictionary, model, optimizer, criterion, source_nodes_mask, criterion_per_node, destination_nodes_with_freezed_weights, weights, torch.tensor(0), BAGS, bags_to_predict=bags, bags_to_predict_labels=bag_labels)
         # save all predictions
         for key, value in max_destination_node_for_source.items():
             best_pred_for_each_restart[key].append(value.item())
@@ -651,7 +797,7 @@ def retrain_bags(data, relation, best_pred_for_each_restart, BAGS):
     #return max_destination_node_for_source, model, max_destination_node_for_bag, loss_per_bag, predictions, destination_nodes_with_freezed_weights, edge_dictionary, best_pred_for_each_restart
 
 def score_relation_bags_parallel(data, relation):
-    R, current_loss = 0, 100
+    rest, current_loss = 0, 100
     # Create a mask for source nodes which are all the nodes into bags
     source_nodes_mask = []
     for bag in data.bags:
@@ -674,33 +820,40 @@ def score_relation_bags_parallel(data, relation):
     # In each restart, the weights of the good destination nodes are freezed for the next restarts
     destination_nodes_with_freezed_weights = []
     
-    while (R<1):
+    while (rest<4):
         # Retrieve model
         model = get_model(weights)
-         # Retrieve optimizer
+        # Retrieve optimizer
         optimizer = get_optimizer(model)
         # Training
         EPOCHS=50
-        for epoch in tqdm(range(0, EPOCHS)):
-            loss, max_destination_node_for_source, loss_per_bag, max_destination_node_for_bag, predictions = train(data, edge_dictionary, model, optimizer, criterion, source_nodes_mask, criterion_per_node, destination_nodes_with_freezed_weights, weights, grad_mask, BAGS=True)
+        #for epoch in tqdm(range(0, EPOCHS)):
+        for epoch in range(0, EPOCHS):
+            loss, max_destination_node_for_source, loss_per_bag, max_destination_node_for_bag, predictions = train(data, edge_dictionary, model, optimizer, criterion, source_nodes_mask, criterion_per_node, destination_nodes_with_freezed_weights, weights, grad_mask, BAGS=True, bags_to_predict=bags, bags_to_predict_labels=bag_labels)
         # save predictions
         for key, value in max_destination_node_for_source.items():
             if key not in predictions_for_each_restart:
                 predictions_for_each_restart[key] = []
             predictions_for_each_restart[key].append(value.item())
         if loss.item() < current_loss:
+            print(rest, 'relation: ', relation, 'new loss: ', loss.item())
             destination_nodes_with_freezed_weights = retrieve_destinations_low_loss(max_destination_node_for_bag, loss_per_bag, source_nodes_mask)
-            current_loss = loss
-            R=0
+            current_loss = loss.item()
+            rest=0
             #print('\n Relation ', relation, ' loss: ', current_loss.item())
         else:
+            print(rest, 'relation: ', relation, 'new loss: ', loss.item())
             #print('\n Relation ', relation, ' end')
-            R+=1
+            rest+=1
         for node in destination_nodes_with_freezed_weights:
             grad_mask[node] = 0
         weights = reinitialize_weights(data, destination_dictionary, model.input.weights.detach(), destination_nodes_with_freezed_weights, BAGS=False)
+    print('relation: ', relation , 'final loss: ', current_loss, len(destination_nodes_with_freezed_weights))
+    for name, param in model.named_parameters():
+            if name == 'output.LinearLayerAttri.weight':
+                print(relation, name, param)
     #print('\nRelation ', relation, ' loss: ', current_loss.item())
-    return relation, loss.item(), model, predictions_for_each_restart
+    return relation,  current_loss, model, predictions_for_each_restart
 
 def score_relation_bags_with_restarts(data, BAGS, VAL):
     best_loss = 100
@@ -716,6 +869,7 @@ def score_relation_bags_with_restarts(data, BAGS, VAL):
     original_bags, original_labels = data.bags, data.bag_labels
     # source nodes are all the nodes in the bags
     source_nodes_mask = []
+    print('bags: ', type(data), data)
     for bag in data.bags:
         for elm in bag:
             if elm not in source_nodes_mask: source_nodes_mask.append(elm)
@@ -840,45 +994,61 @@ def save_confusion_matrix(node_mask, data, emb, index):
 def mpgnn_train(model, optimizer, data):
     model.train()
     optimizer.zero_grad()
-    #weight_loss = torch.tensor([1., 10.])
     out = model(data.x, data.edge_index, data.edge_type)
-    #print(out)
-    # for i in range(0, len(data.train_y)):
-    #     print(out[data.train_idx].squeeze(-1)[i].item(), data.tra9#in_y[i].item())
-    loss = F.nll_loss(out[data.train_idx].squeeze(-1), data.train_y)#, weight = weight_loss)
+    #for name, param in model.named_parameters():
+     #   print(name, param)
+    # Calcolo dei pesi delle classi
+    weights = class_weight.compute_class_weight('balanced', classes=np.unique(data.train_y), y=data.train_y.tolist())
+    # Conversione dei pesi in un tensore di PyTorch
+    weights_tensor = torch.tensor(weights, dtype=torch.float)   
+    loss = F.nll_loss(out[data.train_idx].squeeze(-1), data.train_y)#, weight = weights_tensor)
+    '''
+    # regularization
+    l2_reg = None
+    for param in model.parameters():
+        if l2_reg is None:
+            l2_reg = torch.norm(param, p=2)**2  # Calcola la norma L2 al quadrato del parametro
+        else:
+            l2_reg += torch.norm(param, p=2)**2
+    l2_lambda = 0.01
+    loss += l2_lambda * l2_reg
+    '''
     #loss = F.cross_entropy(out[data.train_idx], data.train_y)
     loss.backward()
+    #for name, param in model.named_parameters():
+     #   print(name, param)
     optimizer.step()
-    return float(loss)
+    return float(loss), weights
 
 @torch.no_grad()
-def mpgnn_validation(model, data):
+def mpgnn_validation(model, data, class_weight):
     model.eval()
     pred = model(data.x, data.edge_index, data.edge_type)#.argmax(dim=-1)
     loss_val = F.nll_loss(pred[data.val_idx].squeeze(-1), data.val_y)
     
     train_predictions = torch.argmax(pred[data.train_idx], 1).tolist()
     val_predictions = torch.argmax(pred[data.val_idx], 1).tolist()
+    
     train_y = data.train_y.tolist()
     val_y = data.val_y.tolist()
-    # train_acc = (train_predictions == train_y).float().mean()
-    # test_acc = (test_predictions == test_y).float().mean()
-    f1_train = f1_score(train_predictions, train_y, average='micro')
+    f1_train = f1_score(train_predictions, train_y, average='macro')
+    #print('train accuracy: ', f1_train)
     f1_val_macro = f1_score(val_predictions, val_y, average = 'macro')
-    f1_val_micro = f1_score(val_predictions, val_y, average = 'micro')
+    #print('val accuracy: ', f1_val_macro)
+    f1_val_micro = f1_score(val_predictions, val_y, average = 'macro')
     return f1_train, f1_val_micro, f1_val_macro,loss_val
 
 @torch.no_grad()
-def mpgnn_test(model, data):
+def mpgnn_test(model, data, class_weight):
     model.eval()
     pred = model(data.x, data.edge_index, data.edge_type)#.argmax(dim=-1)
     loss_test = F.nll_loss(pred[data.test_idx].squeeze(-1), data.test_y)
     
     test_predictions = torch.argmax(pred[data.test_idx], 1).tolist()
     test_y = data.test_y.tolist()
-    # train_acc = (train_predictions == train_y).float().mean()
-    # test_acc = (test_predictions == test_y).float().mean()
-    f1_test_micro = f1_score(test_predictions, test_y, average = 'micro')
+    f1_test_micro = f1_score(test_predictions, test_y, average = 'macro')
+    #print(test_predictions)
+    #print(test_y)
     return loss_test, f1_test_micro
 
 # def mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath):
@@ -903,110 +1073,147 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
     #metapaths = [[2, 0], [3, 1]] # imdb
     #metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
     #metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
+    #metapaths = [[2, 1, 0]]
     print('METAPATHS: ', metapaths)
     mpgnn_model = MPNetm(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapaths), metapaths)
-    print(mpgnn_model)
     # for name, param in mpgnn_model.named_parameters():
     #     print(name, param, param.size())
     mpgnn_optimizer = torch.optim.Adam(mpgnn_model.parameters(), lr=0.01, weight_decay=0.0005)
     best_macro, best_micro = 0., 0.
-    for epoch in range(1, 1000):
-        loss = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
+    for epoch in range(1, 2000):
+        loss, class_weight = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
+        train_acc, f1_val_micro, f1_valt_macro, loss_val = mpgnn_validation(mpgnn_model, data_mpgnn, class_weight)
+        if f1_val_micro > best_micro:
+            best_micro = f1_val_micro
+            best_model = mpgnn_model
         if epoch % 100 == 0:
-            train_acc, f1_val_micro, f1_valt_macro, loss_val = mpgnn_validation(mpgnn_model, data_mpgnn)
             print(epoch, "train loss %0.3f" % loss, "validation loss %0.3f" % loss_val,
                   'train micro: %0.3f'% train_acc, 'validation micro: %0.3f'% f1_val_micro)
-            if f1_val_micro > best_micro:
-                best_micro = f1_val_micro
-                best_model = mpgnn_model
-    test_loss, f1_micro_test = mpgnn_test(best_model, data_mpgnn)
+            
+    test_loss, f1_micro_test = mpgnn_test(best_model, data_mpgnn, class_weight)
     print("test loss %0.3f" % test_loss, "test micro %0.3f" % f1_micro_test)
     return f1_micro_test
 
+def find_smallest_values(accuracies_list):
+    # Creazione del modello DBSCAN
+    dbscan = DBSCAN(eps=0.1, min_samples=1)
+    
+    # Addestramento del modello
+    dbscan.fit(np.array(accuracies_list).reshape(-1, 1))
+    
+    # Trovare i cluster unici
+    unique_labels = np.unique(dbscan.labels_)
+    
+    # Trovare il cluster con un solo elemento
+    smallest_cluster = None
+    smallest_cluster_size = float('inf')
+    
+    for label in unique_labels:
+        cluster_indices = np.where(dbscan.labels_ == label)[0]
+        cluster_size = len(cluster_indices)
+        
+        if cluster_size == 1 and cluster_size < smallest_cluster_size:
+            smallest_cluster = cluster_indices
+            smallest_cluster_size = cluster_size
+    
+    # Verificare se è stato trovato un cluster con un solo elemento
+    if smallest_cluster is not None:
+        smallest_values = [accuracies_list[i] for i in smallest_cluster]
+        return smallest_values
+    
+    return min(accuracies_list) 
+
 def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset):
-    # Obtain true 0|1 labels for each node, feature matrix (1-hot encoding) and links among nodes
-    if dataset == 'complex' or dataset == 'simple':
-        sources = []
-        true_labels, features, edges, embedding = load_files(node_file_path, link_file_path, label_file_path, embedding_file_path, dataset)
-    else: 
-        true_labels, features, edges, sources, labels_multi = load_files(node_file_path, link_file_path, label_file_path, embedding_file_path, dataset)
-    # Get features' matrix
-    x = get_node_features(features)
-    # Get edge_index and types
-    edge_index, edge_type = get_edge_index_and_type_no_reverse(edges)
-
-    # Split data into train and test
-    node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(true_labels, features, sources, dataset)
-    #node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(labels_multi, features, sources, dataset)
-
-    # Dataset for MPGNN
-    data_mpgnn = Data()
-    data_mpgnn.x = x
-    data_mpgnn.edge_index = edge_index
-    data_mpgnn.edge_type = edge_type
-    data_mpgnn.train_idx = train_idx
-    data_mpgnn.test_idx = test_idx
-    data_mpgnn.train_y = train_y
-    data_mpgnn.test_y = test_y
-    data_mpgnn.val_idx = val_idx
-    data_mpgnn.val_y = val_y
-    data_mpgnn.num_nodes = node_idx.size(0)
-    # Variables
-    if sources:
-        source_nodes_mask = sources
-    else:
-        source_nodes_mask = []
-    metapath = []
-
-    # Dataset for score function
-    data = Data()
-    data.x = x
-    data.edge_index = edge_index
-    data.edge_type = edge_type
-    data.labels = labels_multi
-    data.labels = data.labels.unsqueeze(-1)
-    data.num_nodes = x.size(0)
-    data.bags = torch.empty(1)
-    data.bag_labels = torch.empty(1)
-    # generate files for gtn
-    # gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data)
-    # All possible relations
-    relations = torch.unique(data.edge_type).tolist()
-    mp = []
-    #mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, mp)
-    #print(mpgnn_f1_micro)
-
-
     # MPI variables
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
 
-    # metapaths variables
-    current_metapaths_list, current_metapaths_dict = [], {}
-    intermediate_metapaths_list = []
-    final_metapaths_list, final_metapaths_dict = [], {}
+    if rank == 0:
+        print(dataset)
+        # Obtain true 0|1 labels for each node, feature matrix (1-hot encoding) and links among nodes
+        if dataset == 'complex' or dataset == 'simple':
+            sources = []
+            true_labels, features, edges, embedding = load_files(node_file_path, link_file_path, label_file_path, embedding_file_path, dataset)
+        elif dataset == 'fb15k237':
+            true_labels, features, edges, sources, num_rel, labels_multi = load_files_fb15k237(node_file_path, link_file_path, label_file_path, dataset)
+        elif dataset == 'dblp' or dataset == 'imdb':
+            true_labels, features, edges, sources, num_rel, labels_multi, train_idx, train_y, val_idx, val_y, test_idx, test_y = load_files_dblp(node_file_path, link_file_path)
+        else: 
+            true_labels, features, edges, sources, labels_multi = load_files(node_file_path, link_file_path, label_file_path, embedding_file_path, dataset)
+        # Get features' matrix
+        x = get_node_features(features)
+        
+        if dataset == 'fb15k237' or dataset == 'dblp' or dataset == 'imdb' :
+            input_dim = len(x[0])
+            ll_output_dim = len(torch.unique(true_labels).tolist())
+
+
+        # Get edge_index and types
+        edge_index, edge_type = get_edge_index_and_type_no_reverse(edges)
+
+        if dataset != 'dblp':
+            # Split data into train and test
+            node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(true_labels, features, sources, dataset)
+        #node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(labels_multi, features, sources, dataset)
+        #x = mask_features_test_nodes(test_idx, val_idx, x)
+  
+        # Dataset for MPGNN
+        data_mpgnn = Data()
+        data_mpgnn.x = x
+        data_mpgnn.edge_index = edge_index
+        data_mpgnn.edge_type = edge_type
+        data_mpgnn.train_idx = train_idx
+        data_mpgnn.test_idx = test_idx
+        data_mpgnn.train_y = train_y
+        data_mpgnn.test_y = test_y
+        data_mpgnn.val_idx = val_idx
+        data_mpgnn.val_y = val_y
+        data_mpgnn.num_nodes = data_mpgnn.x.size(0)
+        # Variables
+        if sources:
+            source_nodes_mask = sources
+        else:
+            source_nodes_mask = []
+        metapath = []
+
+        # generate files for gtn
+        # gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data)
+
+    
 
     if rank == 0:
+        # metapaths variables
+        current_metapaths_list, current_metapaths_dict = [], {}
+        intermediate_metapaths_list = []
+        final_metapaths_list, final_metapaths_dict = [], {}
+
         # Dataset for score function
         data = Data()
         data.x = x
         data.edge_index = edge_index
         data.edge_type = edge_type
-        data.labels = labels_multi
+        if dataset == 'simple' or dataset == 'complex':
+            data.labels = true_labels
+        else:
+            data.labels = labels_multi
         data.labels = data.labels.unsqueeze(-1)
         data.num_nodes = x.size(0)
         data.bags = torch.empty(1)
         data.bag_labels = torch.empty(1)
         data.source_nodes_mask = source_nodes_mask
-
         # All possible relations
         relations = torch.unique(data.edge_type).tolist()
-        actual_relations = node_types_and_connected_relations(data)
+        actual_relations = node_types_and_connected_relations(data, BAGS=False)
+        result = []
+        intermediate_metapaths_list = []
     else:
         data = None
         relations = None
         actual_relations = None
+        current_metapaths_list = None 
+        current_metapaths_dict = None
+        intermediate_metapaths_list = None
 
     # Il processo padre invia i dati ai processi figli
     data = comm.bcast(data, root=0)
@@ -1014,36 +1221,66 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
     actual_relations = comm.bcast(actual_relations, root=0)
 
     # Ogni processo figlio riceve solo una parte della lista graph
-    local_relations = np.array_split(relations, size)[rank]
-
+    local_relations = np.array_split(actual_relations, size)[rank]
+    #local_relations = np.array_split(relations, size)[rank]
+    
     # Execute the function
-    result = []
+    p_result = []
     for rel in local_relations:
         partial_result = score_relation_parallel(data, rel, data.source_nodes_mask)
-        result.append(partial_result)
+        p_result.append(partial_result)
 
     # Ogni processo figlio invia il risultato al processo padre
-    result = comm.gather(result, root=0)
+    result = comm.gather(p_result, root=0)
+    if rank == 0:
+       print('local: ', local_relations)
+       final_result = sum(result, [])
 
     if rank == 0:
         # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
-        final_result = []
-        for list in result:
-            for tuple in list:
-                final_result.append(tuple)
+        #final_result = []
+        #for list in final_result:
+            #if len(list[2]) != 0:
+          #      final_result.append(list)
+        #print()
+        #print('Relations and scores: ')
+        min_a, min_n = 100, 0
+        print('first iteration')
         for r in final_result:
             print(r[0], r[1])
-        # print(final_result)
+            if r[1] < min_a:
+                min_a = r[1]
+                min_n = r[0]
+        #print()
+        rels, accs = [], []
+        for item in final_result:
+            value_0 = item[0]  # Valore in posizione 0
+            value_1 = item[1]  # Valore in posizione 1
+            rels.append(value_0)
+            accs.append(value_1)
+        #smallest_values = find_smallest_values(accs)
+        #print('smallest : ', smallest_values, min_n, min_a)
+
+        # creo l'array delle differenze per scegliere quali relazioni considerare
+        accs.sort()
+        array_differenze = np.diff(accs)
+        if len(array_differenze) >= 2:
+            indice = np.argmax(array_differenze)
+            # calculate  a loss-threshold (we want to keep only relations with the smallest losses
+            # but may be more than one -> multiple meta-paths
+            mean = np.mean([t[1] for t in final_result]) 
+            # take only the relations under the mean threshold (best is a list of tuples
+            best = [item for item in final_result if item[1] <= accs[indice]]
+        else:
+            best = [item for item in final_result]
+
         # final_result[0][0] -> relation
         # final_result[0][1] -> loss 
         # final_result[0][2] -> edge_dictionary
         # final_result[0][3] -> dest_dictionary
 
-        # calculate  a loss-threshold (we want to keep only relations with the smallest losses
-        # but may be more than one -> multiple meta-paths
-        mean = np.mean([t[1] for t in final_result]) 
-        # take only the relations under the mean threshold (best is a list of tuples)
-        best = [item for item in final_result if item[1] < mean]
+        
+        #best = [item for item in final_result if item[1] <= min_a]
         # save relations in metapaths list
         for tuple in best:
             current_metapaths_list.append([tuple[0]])
@@ -1060,71 +1297,117 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
     # send current metapaths list and dict to children
     current_metapaths_list = comm.bcast(current_metapaths_list, root=0)
     current_metapaths_dict = comm.bcast(current_metapaths_dict, root=0)
-
+    #'''
     while current_metapaths_list:
         for i in range(0, len(current_metapaths_list)):
+            #print('-----------------------NEXT-----------------------', i , len(current_metapaths_list), current_metapaths_list, type(data), data)
             if rank == 0:
                 print('current_metapaths: ', current_metapaths_list, ' final_metapaths: ', final_metapaths_list)#, 'meta dict: ', current_metapaths_dict)
+                print('metapath used now: ', current_metapaths_list[i])
                 create_bags(current_metapaths_dict[str(current_metapaths_list[i])][2], current_metapaths_dict[str(current_metapaths_list[i])][3], data)
-            # Il processo padre invia i dati ai processi figli
-            data = comm.bcast(data, root=0)
-            relations = comm.bcast(relations, root=0)
-
-            # Ogni processo figlio riceve solo una parte della lista graph
-            local_relations = np.array_split(relations, size)[rank]
-
-            # Execute the function
-            result = []
-            for rel in local_relations:
-                partial_result = score_relation_bags_parallel(data, rel)
-                result.append(partial_result)
-
-            # Ogni processo figlio invia il risultato al processo padre
-            result = comm.gather(result, root=0)
+                actual_relations = node_types_and_connected_relations(data, BAGS=True)
+                print('actual : ', len(actual_relations))
+                #print('bags: ', data.bags)
             
-            if rank == 0:
-                bool = False
-                # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
-                final_result = []
-                for list in result:
-                    for tuple in list:
-                        final_result.append(tuple)
-                # relation, loss.item(), model, predictions_for_each_restart
-                for j in range(0, len(final_result)):
-                    #print('relation', final_result[j][0], 'score: ', final_result[j][1])
-                    if final_result[j][1] <= np.mean([t[1] for t in final_result]): #0.01:
-                        tmp_meta = current_metapaths_list[i].copy()
-                        tmp_meta.insert(0, final_result[j][0])
-                        mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, [tmp_meta])
-                        #print('actual meta: ', tmp_meta, 'micro f1: ', mpgnn_f1_micro, 'previous micro: ', current_metapaths_dict[str(current_metapaths_list[i])][0])
-                        if mpgnn_f1_micro > current_metapaths_dict[str(current_metapaths_list[i])][0] and tmp_meta not in intermediate_metapaths_list:
-                            intermediate_metapaths_list.append(tmp_meta)
-                            # retrain bags
-                            predictions_for_each_restart = retrain_bags(data, final_result[j][0], final_result[j][3], BAGS=True)
-                            # relabel nodes into the bags
-                            source_nodes_mask = relabel_nodes_into_bags(predictions_for_each_restart, data, final_result[j][2])
-                            edg_dictionary, dest_dictionary  = create_edge_dictionary(data, final_result[j][0], source_nodes_mask, BAGS=False)
-                            new_edge_dictionary, new_dest_dictionary = clean_dictionaries(data, edg_dictionary, dest_dictionary, final_result[j][2])
-                            current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], final_result[j][1], new_edge_dictionary, new_dest_dictionary]
-                            #print(len(current_metapaths_dict[str(tmp_meta)]))
-                        elif mpgnn_f1_micro < current_metapaths_dict[str(current_metapaths_list[i])][0] and j == len(final_result)-1:
-                            final_metapaths_list.append(current_metapaths_list[i])
-                #print('final_metapath_list: ', final_metapaths_list, 'current meta list: ', current_metapaths_list, 'intermediate: ', intermediate_metapaths_list)
+            # check whether there are relations
+            
+            if actual_relations:
+
+                # Il processo padre invia i dati ai processi figli
+                data = comm.bcast(data, root=0)
+                actual_relations = comm.bcast(actual_relations, root=0)
+
+                # Ogni processo figlio riceve solo una parte della lista graph
+                local_relations = np.array_split(actual_relations, size)[rank]
+                # Execute the function
+                #for rel in local_relations:
+                #    partial_result = score_relation_bags_parallel(data, rel)
+
+                p_result = []
+                for rel in local_relations:
+                    partial_result = score_relation_bags_parallel(data, rel)
+                    p_result.append(partial_result)
+
+                # Ogni processo figlio invia il risultato al processo padre
+                result = comm.gather(p_result, root=0)
+
+                if rank == 0:
+                    at_least_one = False
+                    arr = []
+                    bool = False
+                    # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
+                    final_result = sum(result, [])
+                    for r in final_result:
+                        print(r[0], r[1])
+                        arr.append(r[1])
+                    # creo l'array delle differenze per scegliere quali relazioni considerare
+                    arr.sort()
+                    array_differenze = np.diff(arr)
+                    indice = np.argmax(array_differenze)
+                    print('threshold: ', arr[indice])
+                    # relation, loss.item(), model, predictions_for_each_restart
+                    for j in range(0, len(final_result)):
+                        #print('relation', final_result[j][0], 'score: ', final_result[j][1])
+                        if final_result[j][1] <= arr[indice]: #np.mean([t[1] for t in final_result]): #0.01:
+                        #if final_result[j][1] <= 0.02:
+                            tmp_meta = current_metapaths_list[i].copy()
+                            tmp_meta.insert(0, final_result[j][0])
+                            mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, [tmp_meta])
+                            print('actual meta: ', tmp_meta, 'micro f1: ', mpgnn_f1_micro, 'previous micro: ', current_metapaths_dict[str(current_metapaths_list[i])][1], 'previous meta: ', current_metapaths_list[i])
+                            if mpgnn_f1_micro > current_metapaths_dict[str(current_metapaths_list[i])][1] and tmp_meta not in intermediate_metapaths_list and mpgnn_f1_micro > 0.6:
+                                print('better')
+                                intermediate_metapaths_list.append(tmp_meta)
+                                # retrain bags
+                                predictions_for_each_restart = retrain_bags(data, final_result[j][0], final_result[j][3], BAGS=True)
+                                #for i, e in predictions_for_each_restart.items():
+                                 #   print(i, e)
+                                # relabel nodes into the bags
+                                source_nodes_mask = relabel_nodes_inside_bags(predictions_for_each_restart, data, final_result[j][2])
+                                edg_dictionary, dest_dictionary  = create_edge_dictionary(data, final_result[j][0], source_nodes_mask, BAGS=False)
+                                new_edge_dictionary, new_dest_dictionary = clean_dictionaries(data, edg_dictionary, dest_dictionary, final_result[j][2])
+                                current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], mpgnn_f1_micro, new_edge_dictionary, new_dest_dictionary]
+                                #current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], final_result[j][1], new_edge_dictionary, new_dest_dictionary]
+                                at_least_one = True
+                            elif mpgnn_f1_micro < current_metapaths_dict[str(current_metapaths_list[i])][1] and at_least_one==False and j==len(final_result)-1:
+                                print('worst')
+                                if current_metapaths_list[i] not in final_metapaths_list: final_metapaths_list.append(current_metapaths_list[i])
+                    print('final_metapath_list: ', final_metapaths_list, 'current meta list: ', current_metapaths_list, 'intermediate: ', intermediate_metapaths_list)
         if rank == 0:
-            current_metapaths_list = intermediate_metapaths_list.copy()
+            if not intermediate_metapaths_list:
+                final_metapaths_list = current_metapaths_list.copy()
+                current_metapaths_list = []
+            else:
+                current_metapaths_list = intermediate_metapaths_list.copy()
+                intermediate_metapaths_list = []
+        current_metapaths_list = comm.bcast(current_metapaths_list, root=0)
+        # If intermediate metapath list is empty it means that the system didn't find any new metapath
+        # intermediate_metapaths_list = comm.bcast(intermediate_metapaths_list, root=0)
+        # if rank == 0:
+        #     print('ci siamo ', intermediate_metapaths_list)
+        #     if not intermediate_metapaths_list:
+        #        return current_metapaths_list
+        #     current_metapaths_list = intermediate_metapaths_list.copy()
+        #     intermediate_metapaths_list = []
+
+        # if not intermediate_metapaths_list:
+        #     return
 
     # final training
     if rank == 0:
+        for elm in current_metapaths_list: 
+            if elm not in final_metapaths_list: final_metapaths_list.append(elm)
+        print('siamo alla fine', current_metapaths_list, final_metapaths_list)
         mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, final_metapaths_list)
+        print("Final accuracy: ", mpgnn_f1_micro)
         return mpgnn_f1_micro
-    
- 
+    return
+    #'''
 
 if __name__ == '__main__':
 
     
     EPOCHS = 200
-    COMPLEX = 'DBLP'
+    COMPLEX = True
     RESTARTS = 5
     NEGATIVE_SAMPLING = False
 
@@ -1136,13 +1419,15 @@ if __name__ == '__main__':
     if COMPLEX == True:
         input_dim = 6
         ll_output_dim = 2
-        dataset = "complex"
-        folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/length_m_" + str(metapath_length) + "__tot_rel_" + str(tot_rel) + "/"
+        dataset = "simple"
+        #folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/length_m_" + str(metapath_length) + "__tot_rel_" + str(tot_rel) + "/"
+        folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"+ "tot_rel_" + str(tot_rel) + "/"
     elif COMPLEX == False:
         input_dim = 6
         ll_output_dim = 2
         dataset = "simple"
-        folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/length_m_" + str(metapath_length) + "__tot_rel_" + str(tot_rel) + "/"
+        #folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/length_m_" + str(metapath_length) + "__tot_rel_" + str(tot_rel) + "/"
+        folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"+ "tot_rel_" + str(tot_rel) + "/"
     elif COMPLEX == 'IMDB':
         tot_rel=4
         input_dim = 3066
@@ -1161,6 +1446,18 @@ if __name__ == '__main__':
         ll_output_dim=2
         dataset = 'tot_rel_5'
         folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/synthetic_multi/" + dataset + "/"
+    elif COMPLEX == 'fb15k237':
+        input_dim=55
+        tot_rel= 227
+        ll_output_dim= 2
+        dataset = 'fb15k237'
+        folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"
+    elif COMPLEX == 'dblp':
+        input_dim=55
+        tot_rel= 227
+        ll_output_dim= 2
+        dataset = 'dblp'
+        folder="/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/"
     
     node_file= folder + "node.dat"
     link_file= folder + "link.dat"
