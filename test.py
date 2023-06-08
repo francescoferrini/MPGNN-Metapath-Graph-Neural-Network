@@ -9,10 +9,29 @@ import pickle
 import scipy.sparse as sp
 from scipy.sparse import csr_matrix
 import pandas as pd
+import torch
+from torch_sparse import coalesce
 
 
 def main():
     
+
+    # Define the row index, column index, and value
+    total = torch.tensor([[0, 1, 1, 2, 2, 3], [1, 2, 2, 3, 3, 4]], dtype=torch.long)
+    value = torch.tensor([1, 2, 3, 4, 5, 6])
+
+   
+    # Calculate the total number of nodes in the graph
+    nu = 5
+
+    # Apply the coalesce function to combine duplicate elements
+    coalesced_index, coalesced_value = coalesce(total, value, m=nu, n=nu, op='add')
+
+    # Print the result
+    print(coalesced_index)
+    print(coalesced_value)
+
+    '''
     ## Edges
     path = '/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/edges.pkl'
     with open(path, "rb") as file:
@@ -73,7 +92,7 @@ def main():
     with open("/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_test.dat", "w") as f:
         for i in range(0, len(data[2])):
             f.write(str(data[2][i][0]) + '\t' + str(data[2][i][1]) + '\n')
-        f.close()
+        f.close()'''
     
 if __name__ == '__main__':
     main()

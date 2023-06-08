@@ -30,7 +30,7 @@ from imblearn.under_sampling import RandomUnderSampler
 
 seed= 10
 torch.manual_seed(seed)
-
+C = 0
 
 def masked_edge_index(edge_index, edge_mask):
     if isinstance(edge_index, Tensor):
@@ -58,10 +58,11 @@ def node_types_and_connected_relations(data, BAGS):
                 if data.edge_type[i].item() not in rels: rels.append(data.edge_type[i].item())
     else:
         for i in range(0, len(data.edge_type)):
-            if data.edge_index[0][i].item() in data.source_nodes_mask:
+            #if data.edge_index[0][i].item() in data.source_nodes_mask and data.labels[data.edge_index[0][i].item()].item() == 1:
+            if data.labels[data.edge_index[0][i].item()].item() == 1:
                 if data.edge_type[i].item() not in rels: rels.append(data.edge_type[i].item())
-    if not data.source_nodes_mask:
-        rels = torch.unique(data.edge_type).tolist()
+    #if not data.source_nodes_mask:
+    #    rels = torch.unique(data.edge_type).tolist()
     return rels
     
 def load_files_fb15k237(node_file_path, link_file_path, label_file_path, dataset):
@@ -152,9 +153,11 @@ def load_files(node_file_path, links_file_path, label_file_path, embedding_file_
         new_l = torch.tensor(new_l)
         return labels, colors, links, source_nodes_with_labels, new_l
     
-def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data):
+def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data, dataset_path):
     from scipy.sparse import csr_matrix
-
+    if not os.path.exists(dataset_path):
+        # Crea la cartella
+        os.makedirs(dataset_path)
     edges_list = []
     rels = torch.unique(data.edge_type).tolist()
     for r in rels:
@@ -176,7 +179,7 @@ def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, da
         # crea la matrice di adiacenza
         car_matrix = csr_matrix((values, (row_indices, col_indices)), shape=(len(node_ids), len(node_ids)))
         edges_list.append(car_matrix)
-    with open('edges.pkl', 'wb') as handle:
+    with open(dataset_path + '/edges.pkl', 'wb') as handle:
         pickle.dump(edges_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
 
@@ -197,12 +200,12 @@ def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, da
     labels_list.append(train_labels_list)
     labels_list.append(val_labels_list)
     labels_list.append(test_labels_list)
-    with open('labels.pkl', 'wb') as handle:
+    with open(dataset_path + '/labels.pkl', 'wb') as handle:
         pickle.dump(labels_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     # node features
     features = data.x.type(torch.int64)
-    with open('node_features.pkl', 'wb') as handle:
+    with open(dataset_path + '/node_features.pkl', 'wb') as handle:
         pickle.dump(features.numpy(), handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
@@ -560,26 +563,41 @@ def clean_bags_for_relation_type(data, edge_dictionary):
     #data.bag_labels = torch.Tensor(to_keep_labels).unsqueeze(-1)
     return to_keep, torch.Tensor(to_keep_labels).unsqueeze(-1)
 
-def relabel_nodes_inside_bags(predictions_for_each_restart, data, mod):
+def relabel_nodes_inside_bags(predictions_for_each_restart, data, mod, embeddings):
+    for name, param in mod.named_parameters():
+            if name == 'output.LinearLayerAttri.weight':  
+                param_list = param
+    #print(param_list.tolist()[0])
     # if a node into the bags is predicted as 1 at least one time, then his label willl be 1 otherwise 0
     data.labels = torch.zeros(data.num_nodes, 1)
     for k, v in predictions_for_each_restart.items():
+        '''print('---')
+        print(v)
+        print(param_list.tolist()[0])
+        print(data.x[k])
+        print(torch.dot(torch.tensor(param_list.tolist()[0]), data.x[k]).item())'''
+        #v = [x * torch.dot(torch.tensor(param_list.tolist()[0]), data.x[k]).item() for x in v]
         data.labels[k] = 0
-        for w in v:
-            if w > 0.9:
-                data.labels[k] = 1
+        if max(v) > 0.9:
+            data.labels[k] = 1
     #for name, param in mod.named_parameters():
     #    print(name, param)
     # delete from source mask, nodes that have a color value similar to zero (a zero in the linear layer)
+    #print('1: ', mod.output.LinearLayerAttri.weight)
     
+    #print(mod.output.LinearLayerAttri.weight.detach.tolist())
     src = list(predictions_for_each_restart.keys())
-    # print('before: ', len(src))
-    # src_copy = src
-    # for n in src:
-    #     dot_prod = torch.dot(data.x[n], mod.output.LinearLayerAttri.weight[0])
-    #     if dot_prod.item() < 0.1:
-    #         src_copy.remove(n)
-    # print('after: ', len(src_copy))
+    # Calcola la matrice di confusione
+    '''cm = confusion_matrix(embeddings, data.labels.tolist())
+
+    # Estrai i valori dalla matrice di confusione
+    tn, fp, fn, tp = cm.ravel()
+
+    # Stampa i valori
+    print("True Positive:", tp)
+    print("False Positive:", fp)
+    print("True Negative:", tn)
+    print("False Negative:", fn)'''
     return src
     
 def freeze_weights(model, destination_nodes_with_freezed_weights, previous_weights):
@@ -777,7 +795,7 @@ def retrain_bags(data, relation, best_pred_for_each_restart, BAGS):
     criterion_per_node = get_loss_per_node()
 
     destination_nodes_with_freezed_weights = []
-    RESTARTS=10
+    RESTARTS=1
     EPOCHS=50
     for i in tqdm(range(0, RESTARTS)):
         # Retrieve model
@@ -820,7 +838,7 @@ def score_relation_bags_parallel(data, relation):
     # In each restart, the weights of the good destination nodes are freezed for the next restarts
     destination_nodes_with_freezed_weights = []
     
-    while (rest<4):
+    while (rest<2):
         # Retrieve model
         model = get_model(weights)
         # Retrieve optimizer
@@ -836,22 +854,22 @@ def score_relation_bags_parallel(data, relation):
                 predictions_for_each_restart[key] = []
             predictions_for_each_restart[key].append(value.item())
         if loss.item() < current_loss:
-            print(rest, 'relation: ', relation, 'new loss: ', loss.item())
+            #print(rest, 'relation: ', relation, 'new loss: ', loss.item())
             destination_nodes_with_freezed_weights = retrieve_destinations_low_loss(max_destination_node_for_bag, loss_per_bag, source_nodes_mask)
             current_loss = loss.item()
             rest=0
             #print('\n Relation ', relation, ' loss: ', current_loss.item())
         else:
-            print(rest, 'relation: ', relation, 'new loss: ', loss.item())
+            #print(rest, 'relation: ', relation, 'new loss: ', loss.item())
             #print('\n Relation ', relation, ' end')
             rest+=1
         for node in destination_nodes_with_freezed_weights:
             grad_mask[node] = 0
         weights = reinitialize_weights(data, destination_dictionary, model.input.weights.detach(), destination_nodes_with_freezed_weights, BAGS=False)
-    print('relation: ', relation , 'final loss: ', current_loss, len(destination_nodes_with_freezed_weights))
-    for name, param in model.named_parameters():
-            if name == 'output.LinearLayerAttri.weight':
-                print(relation, name, param)
+    #print('relation: ', relation , 'final loss: ', current_loss, len(destination_nodes_with_freezed_weights))
+    #for name, param in model.named_parameters():
+     #       if name == 'output.LinearLayerAttri.weight':
+      #          print(relation, name, param)
     #print('\nRelation ', relation, ' loss: ', current_loss.item())
     return relation,  current_loss, model, predictions_for_each_restart
 
@@ -1123,7 +1141,7 @@ def find_smallest_values(accuracies_list):
     
     return min(accuracies_list) 
 
-def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset):
+def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset, dataset_path):
     # MPI variables
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
@@ -1178,8 +1196,8 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         metapath = []
 
         # generate files for gtn
-        # gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data)
-
+        gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data_mpgnn, dataset_path)
+        print('gtn finished')
     
 
     if rank == 0:
@@ -1205,6 +1223,7 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         # All possible relations
         relations = torch.unique(data.edge_type).tolist()
         actual_relations = node_types_and_connected_relations(data, BAGS=False)
+        print(actual_relations)
         result = []
         intermediate_metapaths_list = []
     else:
@@ -1354,27 +1373,33 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
                             tmp_meta.insert(0, final_result[j][0])
                             mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, [tmp_meta])
                             print('actual meta: ', tmp_meta, 'micro f1: ', mpgnn_f1_micro, 'previous micro: ', current_metapaths_dict[str(current_metapaths_list[i])][1], 'previous meta: ', current_metapaths_list[i])
-                            if mpgnn_f1_micro > current_metapaths_dict[str(current_metapaths_list[i])][1] and tmp_meta not in intermediate_metapaths_list and mpgnn_f1_micro > 0.6:
-                                print('better')
-                                intermediate_metapaths_list.append(tmp_meta)
-                                # retrain bags
-                                predictions_for_each_restart = retrain_bags(data, final_result[j][0], final_result[j][3], BAGS=True)
-                                #for i, e in predictions_for_each_restart.items():
-                                 #   print(i, e)
-                                # relabel nodes into the bags
-                                source_nodes_mask = relabel_nodes_inside_bags(predictions_for_each_restart, data, final_result[j][2])
-                                edg_dictionary, dest_dictionary  = create_edge_dictionary(data, final_result[j][0], source_nodes_mask, BAGS=False)
-                                new_edge_dictionary, new_dest_dictionary = clean_dictionaries(data, edg_dictionary, dest_dictionary, final_result[j][2])
-                                current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], mpgnn_f1_micro, new_edge_dictionary, new_dest_dictionary]
-                                #current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], final_result[j][1], new_edge_dictionary, new_dest_dictionary]
-                                at_least_one = True
-                            elif mpgnn_f1_micro < current_metapaths_dict[str(current_metapaths_list[i])][1] and at_least_one==False and j==len(final_result)-1:
-                                print('worst')
-                                if current_metapaths_list[i] not in final_metapaths_list: final_metapaths_list.append(current_metapaths_list[i])
+                            if mpgnn_f1_micro > 0.99: 
+                                final_metapaths_list = [tmp_meta.copy()]
+                                current_metapaths_list = []
+                                intermediate_metapaths_list = []
+                            else:
+                                if mpgnn_f1_micro > current_metapaths_dict[str(current_metapaths_list[i])][1] and tmp_meta not in intermediate_metapaths_list:
+                                    print('better')
+                                    intermediate_metapaths_list.append(tmp_meta)
+                                    # retrain bags
+                                    predictions_for_each_restart = retrain_bags(data, final_result[j][0], final_result[j][3], BAGS=True)
+                                    #for i, e in predictions_for_each_restart.items():
+                                    #   print(i, e)
+                                    # relabel nodes into the bags
+                                    source_nodes_mask = relabel_nodes_inside_bags(predictions_for_each_restart, data, final_result[j][2], embedding)
+                                    edg_dictionary, dest_dictionary  = create_edge_dictionary(data, final_result[j][0], source_nodes_mask, BAGS=False)
+                                    new_edge_dictionary, new_dest_dictionary = clean_dictionaries(data, edg_dictionary, dest_dictionary, final_result[j][2])
+                                    current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], mpgnn_f1_micro, new_edge_dictionary, new_dest_dictionary]
+                                    #current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], final_result[j][1], new_edge_dictionary, new_dest_dictionary]
+                                    at_least_one = True
+                                elif mpgnn_f1_micro < current_metapaths_dict[str(current_metapaths_list[i])][1] and at_least_one==False and j==len(final_result)-1:
+                                    print('worst')
+                                    if current_metapaths_list[i] not in final_metapaths_list: final_metapaths_list.append(current_metapaths_list[i])
                     print('final_metapath_list: ', final_metapaths_list, 'current meta list: ', current_metapaths_list, 'intermediate: ', intermediate_metapaths_list)
         if rank == 0:
             if not intermediate_metapaths_list:
-                final_metapaths_list = current_metapaths_list.copy()
+                for elm in current_metapaths_list:
+                    final_metapaths_list.append(elm)
                 current_metapaths_list = []
             else:
                 current_metapaths_list = intermediate_metapaths_list.copy()
@@ -1411,19 +1436,26 @@ if __name__ == '__main__':
     RESTARTS = 5
     NEGATIVE_SAMPLING = False
 
-    metapath_length= 3
-    tot_rel=5
+    metapath_length= 4
+    metapaths_number = 1
+    tot_rel=3
+    deterministic = False
+
+
     aggregation= 'max'
     epochs_relations = 150
     epochs_train = 150
     if COMPLEX == True:
-        input_dim = 6
+        input_dim = 3
         ll_output_dim = 2
         dataset = "simple"
+        if deterministic:
+            folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/deterministic/"+ "tot_rel_" + str(tot_rel) + '_metapaths_number_' + str(metapaths_number) + "/"
         #folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/length_m_" + str(metapath_length) + "__tot_rel_" + str(tot_rel) + "/"
-        folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"+ "tot_rel_" + str(tot_rel) + "/"
+        else:
+            folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/synthetic/"+ "tot_rel_" + str(tot_rel) + '_metapaths_number_' + str(metapaths_number) + '_metapath_length_' + str(metapath_length) + "/"
     elif COMPLEX == False:
-        input_dim = 6
+        input_dim = 3
         ll_output_dim = 2
         dataset = "simple"
         #folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/length_m_" + str(metapath_length) + "__tot_rel_" + str(tot_rel) + "/"
@@ -1466,13 +1498,13 @@ if __name__ == '__main__':
     # Define the filename for saving the variables
     pickle_filename = folder + "iteration_variables.pkl"
     # mpgnn variables
-    hidden_dim = 32
+    hidden_dim = 16
     num_rel = tot_rel
     output_dim = 64
 
-   
-    meta = main(node_file, link_file, label_file, embedding_file, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset)
+    dataset_path = '/Users/francescoferrini/VScode/Graph_Transformer_Networks/data/synthetic/'+ "tot_rel_" + str(tot_rel) + '_metapaths_number_' + str(metapaths_number) + '_metapath_length_' + str(metapath_length) + "/"
     
+    meta = main(node_file, link_file, label_file, embedding_file, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset, dataset_path)
 
 
 

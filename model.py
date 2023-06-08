@@ -7,7 +7,7 @@ import random
 import numpy as np
 
 
-FEATURES_DIM = 6#4231#3066#6##
+FEATURES_DIM = 3#4231#3066#6##
 
 class InputLayer(torch.nn.Module):
     def __init__(self, weights):
