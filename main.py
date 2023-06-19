@@ -28,7 +28,7 @@ from mpi4py import MPI
 from sklearn.cluster import DBSCAN
 from imblearn.under_sampling import RandomUnderSampler
 
-seed= 10
+seed= 30
 torch.manual_seed(seed)
 C = 0
 
@@ -60,6 +60,7 @@ def node_types_and_connected_relations(data, BAGS):
         for i in range(0, len(data.edge_type)):
             #if data.edge_index[0][i].item() in data.source_nodes_mask and data.labels[data.edge_index[0][i].item()].item() == 1:
             if data.labels[data.edge_index[0][i].item()].item() == 1:
+            #if data.edge_index[0][i].item() in data.source_nodes_mask:
                 if data.edge_type[i].item() not in rels: rels.append(data.edge_type[i].item())
     #if not data.source_nodes_mask:
     #    rels = torch.unique(data.edge_type).tolist()
@@ -85,9 +86,11 @@ def load_files_fb15k237(node_file_path, link_file_path, label_file_path, dataset
     new_l = torch.tensor(new_l)
     return labels, colors, links, source_nodes_with_labels, num_relations, new_l
 
-def load_files_dblp(node_file_path, link_file_path):
+def load_files_dblp(dataset):
 
-    colors = pd.read_csv(node_file_path, sep='\t', header = None)
+    folder="/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/"
+    features = folder + 'node.dat'
+    colors = pd.read_csv(features, sep='\t', header = None)
     colors = colors.dropna(axis=1,how='all')
 
     train_labels = pd.read_csv('/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_train.dat', sep='\t', header = None)
@@ -97,7 +100,7 @@ def load_files_dblp(node_file_path, link_file_path):
     test_labels = pd.read_csv('/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_test.dat', sep='\t', header = None)
     test_labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
     labels = pd.concat([train_labels, val_labels, test_labels], ignore_index=True)
-    links = pd.read_csv(link_file_path, sep='\t', header = None)
+    links = pd.read_csv(folder+'link.dat', sep='\t', header = None)
     labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
     source_nodes_with_labels = labels['node'].values.tolist()
     labels = torch.tensor(labels['label'].values)
@@ -153,7 +156,9 @@ def load_files(node_file_path, links_file_path, label_file_path, embedding_file_
         new_l = torch.tensor(new_l)
         return labels, colors, links, source_nodes_with_labels, new_l
     
-def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data, dataset_path):
+def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data, dataset_path, d):
+    path = '/Users/francescoferrini/VScode/MultirelationalGNN/data/final_datasets/metapath_length_4/' + d
+    
     from scipy.sparse import csr_matrix
     if not os.path.exists(dataset_path):
         # Crea la cartella
@@ -179,7 +184,7 @@ def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, da
         # crea la matrice di adiacenza
         car_matrix = csr_matrix((values, (row_indices, col_indices)), shape=(len(node_ids), len(node_ids)))
         edges_list.append(car_matrix)
-    with open(dataset_path + '/edges.pkl', 'wb') as handle:
+    with open(path + 'edges.pkl', 'wb') as handle:
         pickle.dump(edges_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
 
@@ -200,12 +205,12 @@ def gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, da
     labels_list.append(train_labels_list)
     labels_list.append(val_labels_list)
     labels_list.append(test_labels_list)
-    with open(dataset_path + '/labels.pkl', 'wb') as handle:
+    with open(path + 'labels.pkl', 'wb') as handle:
         pickle.dump(labels_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     # node features
     features = data.x.type(torch.int64)
-    with open(dataset_path + '/node_features.pkl', 'wb') as handle:
+    with open(path + 'node_features.pkl', 'wb') as handle:
         pickle.dump(features.numpy(), handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
@@ -333,7 +338,6 @@ def mask_features_test_nodes(test_index, val_index, feature_matrix):
     for indice in val_index:
         feature_matrix[indice] = torch.zeros_like(feature_matrix[indice])
     return feature_matrix
-
 
 def get_edge_index_and_type_no_reverse(links):
     edge_index = links.drop(['relation_type'], axis=1)
@@ -1065,8 +1069,8 @@ def mpgnn_test(model, data, class_weight):
     test_predictions = torch.argmax(pred[data.test_idx], 1).tolist()
     test_y = data.test_y.tolist()
     f1_test_micro = f1_score(test_predictions, test_y, average = 'macro')
-    #print(test_predictions)
-    #print(test_y)
+    #print('preds', test_predictions)
+    #print('test y', test_y)
     return loss_test, f1_test_micro
 
 # def mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath):
@@ -1092,6 +1096,7 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
     #metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
     #metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
     #metapaths = [[2, 1, 0]]
+   # metapaths = [[0, 1, 0, 1], [0, 3, 2, 1]]
     print('METAPATHS: ', metapaths)
     mpgnn_model = MPNetm(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapaths), metapaths)
     # for name, param in mpgnn_model.named_parameters():
@@ -1141,7 +1146,7 @@ def find_smallest_values(accuracies_list):
     
     return min(accuracies_list) 
 
-def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset, dataset_path):
+def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset, dataset_path, d):
     # MPI variables
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
@@ -1155,14 +1160,14 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
             true_labels, features, edges, embedding = load_files(node_file_path, link_file_path, label_file_path, embedding_file_path, dataset)
         elif dataset == 'fb15k237':
             true_labels, features, edges, sources, num_rel, labels_multi = load_files_fb15k237(node_file_path, link_file_path, label_file_path, dataset)
-        elif dataset == 'dblp' or dataset == 'imdb':
-            true_labels, features, edges, sources, num_rel, labels_multi, train_idx, train_y, val_idx, val_y, test_idx, test_y = load_files_dblp(node_file_path, link_file_path)
+        elif dataset == 'dblp' or dataset == 'imdb' or dataset == 'acm':
+            true_labels, features, edges, sources, num_rel, labels_multi, train_idx, train_y, val_idx, val_y, test_idx, test_y = load_files_dblp(dataset)
         else: 
             true_labels, features, edges, sources, labels_multi = load_files(node_file_path, link_file_path, label_file_path, embedding_file_path, dataset)
         # Get features' matrix
         x = get_node_features(features)
         
-        if dataset == 'fb15k237' or dataset == 'dblp' or dataset == 'imdb' :
+        if dataset == 'fb15k237' or dataset == 'dblp' or dataset == 'imdb' or dataset == 'acm':
             input_dim = len(x[0])
             ll_output_dim = len(torch.unique(true_labels).tolist())
 
@@ -1170,10 +1175,10 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         # Get edge_index and types
         edge_index, edge_type = get_edge_index_and_type_no_reverse(edges)
 
-        if dataset != 'dblp':
+        if dataset != 'dblp' and dataset == 'imdb' and dataset == 'acm':
             # Split data into train and test
             node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(true_labels, features, sources, dataset)
-        #node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(labels_multi, features, sources, dataset)
+        node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(true_labels, features, sources, dataset)
         #x = mask_features_test_nodes(test_idx, val_idx, x)
   
         # Dataset for MPGNN
@@ -1196,7 +1201,7 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         metapath = []
 
         # generate files for gtn
-        gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data_mpgnn, dataset_path)
+        gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data_mpgnn, dataset_path, d)
         print('gtn finished')
     
 
@@ -1264,7 +1269,6 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         #print()
         #print('Relations and scores: ')
         min_a, min_n = 100, 0
-        print('first iteration')
         for r in final_result:
             print(r[0], r[1])
             if r[1] < min_a:
@@ -1436,21 +1440,26 @@ if __name__ == '__main__':
     RESTARTS = 5
     NEGATIVE_SAMPLING = False
 
-    metapath_length= 4
+    metapath_length= 2
     metapaths_number = 1
-    tot_rel=3
-    deterministic = False
+    tot_rel=2
+    deterministic = True
+    hidden_dim = 32
+    num_rel = 4
+    output_dim = 64
+    d = 'overlap_0_rels_0/'
 
 
     aggregation= 'max'
     epochs_relations = 150
     epochs_train = 150
     if COMPLEX == True:
-        input_dim = 3
+        input_dim = 2
         ll_output_dim = 2
         dataset = "simple"
         if deterministic:
-            folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/deterministic/"+ "tot_rel_" + str(tot_rel) + '_metapaths_number_' + str(metapaths_number) + "/"
+            folder = '/Users/francescoferrini/VScode/MultirelationalGNN/data/final_datasets/metapath_length_4/' + d
+            #folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/deterministic/"+ "node_types_" + str(tot_rel) + '_metapaths_number_' + str(metapaths_number) + "/"
         #folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/length_m_" + str(metapath_length) + "__tot_rel_" + str(tot_rel) + "/"
         else:
             folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/synthetic/"+ "tot_rel_" + str(tot_rel) + '_metapaths_number_' + str(metapaths_number) + '_metapath_length_' + str(metapath_length) + "/"
@@ -1498,13 +1507,11 @@ if __name__ == '__main__':
     # Define the filename for saving the variables
     pickle_filename = folder + "iteration_variables.pkl"
     # mpgnn variables
-    hidden_dim = 16
-    num_rel = tot_rel
-    output_dim = 64
+    
 
     dataset_path = '/Users/francescoferrini/VScode/Graph_Transformer_Networks/data/synthetic/'+ "tot_rel_" + str(tot_rel) + '_metapaths_number_' + str(metapaths_number) + '_metapath_length_' + str(metapath_length) + "/"
     
-    meta = main(node_file, link_file, label_file, embedding_file, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset, dataset_path)
+    meta = main(node_file, link_file, label_file, embedding_file, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset, dataset_path, d)
 
 
 
