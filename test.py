@@ -11,25 +11,14 @@ from scipy.sparse import csr_matrix
 import pandas as pd
 import torch
 from torch_sparse import coalesce
-
+import networkx as nx
 
 def main():
     
 
-    # Define the row index, column index, and value
-    total = torch.tensor([[0, 1, 1, 2, 2, 3], [1, 2, 2, 3, 3, 4]], dtype=torch.long)
-    value = torch.tensor([1, 2, 3, 4, 5, 6])
+    G = nx.petersen_graph()
 
-   
-    # Calculate the total number of nodes in the graph
-    nu = 5
-
-    # Apply the coalesce function to combine duplicate elements
-    coalesced_index, coalesced_value = coalesce(total, value, m=nu, n=nu, op='add')
-
-    # Print the result
-    print(coalesced_index)
-    print(coalesced_value)
+    print(nx.community.louvain_communities(G, seed=123))
 
     '''
     ## Edges

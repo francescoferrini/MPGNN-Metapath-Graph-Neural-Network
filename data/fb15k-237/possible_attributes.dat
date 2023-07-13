@@ -1,0 +1,177 @@
+Relation:/award/award_category/disciplines_or_subjects
+Possible destinations['Novel', 'Speculative_fiction', 'Film_Director', 'Short_story', 'Novella', 'Non-fiction', 'Crime_Fiction', 'Picture_book', 'Libertarianism', 'Short_Film', 'Anthology']
+
+Relation:/award/ranked_item/appears_in_ranked_lists./award/ranking/list
+Possible destinations['Times_Higher_Education_World_University_Rankings', 'National_Film_Registry', 'Time_100', 'Fortune_Global_500', 'Fortune_1000', 'Fortune_500', 'Le_Mondes_100_Books_of_the_Century']
+
+Relation:/base/culturalevent/event/entity_involved
+Possible destinations['First_French_Empire', 'United_States_Air_Force-GB', 'Brittany', 'Israel_Defense_Forces', 'Bourbon_Spain', 'Taliban', 'Mongol_Empire', 'al-Qaeda', 'Hezbollah', 'House_of_Savoy', 'Second_French_Empire', 'Provisional_Irish_Republican_Army', 'Mughal_Empire', 'Carthage', 'Moldavia', 'Killed_in_action', 'Prime_Minister_of_Canada', 'House_of_Plantagenet', 'Macedonia']
+
+Relation:/base/eating/practicer_of_diet/diet
+Possible destinations['Vegetarianism', 'Veganism']
+
+Relation:/base/schemastaging/organization_extra/phone_number./base/schemastaging/phone_sandbox/service_location
+Possible destinations['Ludhiana', 'Jalandhar', 'Coimbatore', 'Agra', 'Varanasi']
+
+Relation:/business/business_operation/industry
+Possible destinations['Video_game', 'Airline', 'Media', 'Entertainment', 'Consumer_electronics', 'Semiconductor_Manufacture', 'Food', 'Video_game_industry', 'Financial_Services', 'Investment_banking', 'Hospitality', 'Publishing-GB', 'Pharmaceutical_industry', 'Conglomerate', 'Health_care', 'Search_engine', 'Computer_hardware', 'Computer_Animation', 'Shipbuilding', 'Private_equity', 'Aerospace', 'Remax-US', 'Voice_over_IP', 'Fast_food', 'Hotel', 'Clothing']
+
+Relation:/business/job_title/people_with_this_title./business/employment_tenure/company
+Possible destinations['Skidmore,_Owings_&_Merrill', 'Royal_Navy', 'French_Army', 'United_States_Navy', 'United_States_Air_Force-GB', 'Royal_Society', 'Soviet_Air_Forces']
+
+Relation:/dataworld/gardening_hint/split_to
+Possible destinations['Independent_record_label', 'Soldier-GB', 'Bay', 'Lawyer', 'Crime_Fiction', 'Catholicism', 'Comedy-GB', 'White', 'Superhero_movie', 'Comedy', 'Modern_architecture', 'Police_procedural', 'Black']
+
+Relation:/education/educational_degree/people_with_this_degree./education/education/major_field_of_study
+Possible destinations['Project_management', 'Neuroscience', 'News', 'Islamic_studies', 'Media', 'Remax-US']
+
+Relation:/education/educational_institution/colors
+Possible destinations['Gold', 'White', 'Orange', 'Black', 'Silver', 'Old_gold', 'Maroon', 'Crimson', 'Blue', 'Green', 'Brown', 'Navy_Blue', 'Cardinal', 'Purple', 'Yellow', 'Grey', 'Royal_blue', 'Columbia_blue', 'Scarlet', 'Burgundy']
+
+Relation:/education/educational_institution/school_type
+Possible destinations['Private_university', 'Land-grant_university', 'Mixed-sex_education', 'Public_university', 'Private_school', 'Research', 'State_school', 'National_university', 'University', 'Boarding_school', 'Conservatory', 'Day_school', 'Catholic_school', 'Liberal_arts_college', 'Independent_school', 'University-preparatory_school', 'Business_school', 'Magnet_school', 'For-profit_education', 'Secondary_school', 'Community_college']
+
+Relation:/education/educational_institution/students_graduates./education/education/major_field_of_study
+Possible destinations['Neuroscience', 'Remax-US', 'Project_management', 'News', 'Islamic_studies', 'Unix']
+
+Relation:/film/film/distributors./film/film_film_distributor_relationship/film_distribution_medium
+Possible destinations['Blu-ray_disc', 'VHS', 'Streaming_media', 'DVD', 'Video']
+
+Relation:/film/film/featured_film_locations
+Possible destinations['Harlem', 'Vojvodina', 'Oahu', 'Mosul', 'Greenwich', 'Woodland_Hills', 'Bruges', 'Rhine', 'Grand_Teton_National_Park', 'Agra', 'Westminster_Abbey', 'Darwin']
+
+Relation:/film/film/film_festivals
+Possible destinations['2009_Berlin_International_Film_Festival', '2012_Donostia-San_Sebastián_International_Film_Festival', '2010_Sundance_Film_Festival', '2012_Sundance_Film_Festival']
+
+Relation:/film/film/film_format
+Possible destinations['Super_35', '35_mm_film', 'IMAX', 'CinemaScope']
+
+Relation:/film/film/genre
+Possible destinations['Action_Film', 'Romantic_comedy', 'Comedy-GB', 'Crime_Fiction', 'Film_adaptation', 'World_cinema', 'Absurdism', 'Black-and-white', 'Slice_of_life_story', 'Dystopia', 'Historical_fiction', 'Costume_drama', 'Sword_and_sorcery', 'Spy_film', 'Monster_movie', 'Romantic_fantasy', 'Buddy_film', 'Disaster_Film', 'Neo-noir', 'Anime', 'Teen_film', 'Family', 'Prison_film', 'Melodrama', 'Slasher', 'Comedy-drama', 'Superhero_movie', 'Political_cinema', 'Supernatural', 'Parody', 'Animated_cartoon', 'Medical_fiction', 'Detective_fiction', 'Detective-GB', 'Docudrama', 'Road_movie', 'Computer_Animation', 'Concert_film', 'Remake', 'Short_Film', 'Surrealism', 'Comedy_of_manners', 'Art_film', 'Farce', 'Sex_comedy', 'Silent_film', 'Anti-war', 'Stop_motion', 'Anthology', 'Gross_out', 'Social_problem_film', 'Experimental_film', 'Apocalyptic_and_post-apocalyptic_fiction', 'Steampunk', 'Caper_story', 'Political_satire', 'Legal_drama', 'Wuxia', 'Tragicomedy', 'Pre-Code_Hollywood', 'Revisionist_Western', 'Space_opera', 'Blaxploitation_film', 'Nature', 'Sexploitation_film', 'Whodunit', 'Hip_hop_film', 'Propaganda_film', 'Live_action', 'Humour']
+
+Relation:/film/film/language
+Possible destinations['German_food', 'Filipino_language', 'Silent_film']
+
+Relation:/film/film/other_crew./film/film_crew_gig/film_crew_role
+Possible destinations['Makeup_Artist-GB', 'Dialogue_Editor', 'Visual_Effects_Supervisor', 'Set_decorator-GB', 'Special_Effects_Supervisor', 'Sound_Mixer', 'Visual_Effects_Art_Director', 'Special_Effects', 'Visual_Effects', 'Sound_Editor-GB', 'Animation_Director', 'Wardrobe_Supervisor', 'Boom_Operator', 'Set_Dresser', 'Sound_Re-Recording_Mixer-GB', 'Sound', 'Executive_Producer', 'Artist-GB', 'Computer_Animation', 'Mechanic', 'Stunt_performer-GB', 'Cinematographer-GB', 'Film_Producer-GB']
+
+Relation:/film/film/production_companies
+Possible destinations['Davis_Entertainment', 'UK_Film_Council']
+
+Relation:/film/film/release_date_s./film/film_regional_release_date/film_regional_debut_venue
+Possible destinations['2012_Donostia-San_Sebastián_International_Film_Festival', '2009_Berlin_International_Film_Festival', '2012_Sundance_Film_Festival', '2010_Sundance_Film_Festival']
+
+Relation:/film/film/release_date_s./film/film_regional_release_date/film_release_distribution_medium
+Possible destinations['DVD', 'Blu-ray_disc', 'Streaming_media', 'Video']
+
+Relation:/government/government_office_category/officeholders./government/government_position_held/jurisdiction_of_office
+Possible destinations['Toulouse', 'Tours', 'Stepney', 'Bath', 'Nantes']
+
+Relation:/influence/influence_node/influenced_by
+Possible destinations['Surrealism', 'Unix']
+
+Relation:/location/country/capital
+Possible destinations['Kabul', 'Constantinople', 'Pretoria', 'Paramaribo', 'Pietermaritzburg', 'Dunfermline']
+
+Relation:/location/country/form_of_government
+Possible destinations['Republic', 'Parliamentary_system', 'Unitary_state', 'Constitutional_monarchy', 'Presidential_system', 'Democracy']
+
+Relation:/location/country/second_level_divisions
+Possible destinations['County_Roscommon', 'Bedford', 'County_Kildare']
+
+Relation:/location/location/contains
+Possible destinations['Pietermaritzburg', 'Nagasaki', 'Dumfries', 'Brittany', 'Brandon', 'Carthage', 'High_Wycombe', 'Tarzana', 'Hampstead', 'West_Bromwich', 'Rhine', 'Sialkot', 'Oldham', 'Wandsworth', 'Lambeth', 'Constantinople', 'Rochdale', 'Scunthorpe', 'Cairns', 'South_Shields', 'Pretoria', 'Jalandhar', 'Greenwich', 'Birkenhead', 'Forest_Lawn_Memorial_Park', 'Venice', 'Greenwich_Village', 'Richmond,_London', 'Guildford', 'Solihull', 'Harrow,_London', 'Epsom', 'Hemel_Hempstead', 'Rotorua', 'Medina', 'Carlisle,_Cumbria', 'Harlem', 'Colchester', 'Bury_St_Edmunds', 'Wagga_Wagga', 'Columbia_River', 'Dewsbury', 'Salford,_Greater_Manchester', 'Kirkcaldy', 'Hilo', 'Ilford', 'South_Cambridgeshire', 'U.S._Route_66', 'Varanasi', 'Gateshead', 'Canterbury', 'Woodland_Hills', 'Stepney', 'Bruges', 'Bath', 'Bourbon_Spain', 'Scarborough,_North_Yorkshire', 'Folkestone', 'Chelsea', 'Sierra_Nevada', 'Bedford', 'Tampa-St._Petersburg-Clearwater', 'Dunfermline', 'Ayr', 'Mansfield', 'Craven', 'Torquay', 'Darjeeling', 'Hitchin', 'Great_Yarmouth', 'Bangor', 'Boulogne-Billancourt', 'Bendigo', 'Ballarat', 'County_Roscommon', 'Tower_of_London', 'Sutton_Coldfield', 'St_Helens', 'Bryn_Mawr', 'Chatham', 'Pontefract', 'Camberwell', 'Inner_Hebrides', 'Toulouse', 'Oahu', 'Nantes', 'Central_Alberta', 'Paddington', 'Ipswich', 'Carmarthen', 'Irvine', 'Cascade_Range', 'Nancy', 'Lucerne', 'Barnet', 'Aegean_Sea', 'Tours', 'Marylebone', 'Shiraz', 'Greenock', 'Westwood_Village_Memorial_Park_Cemetery', 'Haifa', 'Blue_Ridge_Mountains', 'Washington_metropolitan_area', 'Montmartre_Cemetery', 'Agra', 'Coimbatore', 'Maidstone', 'Ealing', 'Brixton', 'Woodlawn_Cemetery', 'Grimsby', 'Barrow-in-Furness', 'Bellshill', 'Hudson_River', 'Greater_Houston', 'Joseon', 'Wollongong', 'Paramaribo', 'Islington', 'Vojvodina', 'Forest_Lawn_Memorial_Park', 'Himalayas', 'Panama_City', 'Rockhampton', 'Southport', 'Grove_Street_Cemetery', 'Bridgend', 'Miami_metropolitan_area', 'Chiswick', 'Townsville', 'Kobe', 'Darwin', 'Subiaco', 'Hamilton', 'Glasnevin_Cemetery', 'Seattle-Tacoma-Bellevue,_WA_Metropolitan_Statistical_Area', 'Brompton_Cemetery', 'West_Norwood_Cemetery', 'Swindon', 'Westminster_Abbey', 'Hollywood_Forever_Cemetery', 'Pennine_Alps', 'Gold_Coast', 'Stockton-on-Tees', 'Northampton', 'Ashford', 'Dover', 'County_Kildare', 'Golders_Green_Crematorium', 'Grand_Teton_National_Park', 'Kosi_Zone', 'Basra', 'Mosul', 'Danube', 'Kettering', "Pennsylvania's_12th_congressional_district", 'Andes', 'Holy_Cross_Cemetery', 'Ludhiana', 'First_French_Empire']
+
+Relation:/location/location/partially_contains
+Possible destinations['Cascade_Range', 'Himalayas', 'Danube', 'Blue_Ridge_Mountains', 'Andes', 'Moldavia', 'Sierra_Nevada', 'Pennine_Alps']
+
+Relation:/location/location/time_zones
+Possible destinations['Central_Time_Zone', 'Mountain_Time_Zone-US', 'Eastern_Time_Zone', 'Central_European_Time_Zone-US', 'Pacific_Time_Zone', 'Greenwich_Mean_Time_Zone', 'Alaska_Time_Zone', 'East_Africa_Time_Zone-US', 'Philippine_Time_Zone-US', 'Eastern_European_Time_Zone', 'Atlantic_Time_Zone-US', 'China_Time_Zone-US', 'Newfoundland_Time_Zone']
+
+Relation:/location/statistical_region/religions./location/religion_percentage/religion
+Possible destinations['Mormonism', 'Methodism', 'Nondenominational_Christianity', 'Baptists', 'Presbyterianism', 'Eastern_Catholic_Churches', 'Churches_of_Christ', 'Lutheranism', 'Evangelicalism', 'Pentecostalism', 'United_Church_of_Christ', 'Anglicanism', 'Catholicism', 'Christian', 'Greek_Orthodox_Church', 'Unitarian_Universalism', 'Sunni_Islam', 'Atheism', 'Calvinism', 'Church_of_England']
+
+Relation:/medicine/disease/risk_factors
+Possible destinations['Female', 'Tobacco_smoking', 'Male', 'Old_age', 'Chemotherapy', 'Vegetarianism', 'Cystic_fibrosis', 'Asian', 'Non-steroidal_anti-inflammatory_drug', 'Poverty']
+
+Relation:/military/military_conflict/combatants./military/military_combatant_group/combatants
+Possible destinations['Qing_Dynasty', 'Apache', 'Mongol_Empire', 'Kingdom_of_Sardinia', 'Early_modern_France', 'Bourbon_Spain', 'First_French_Empire', 'Hezbollah', 'Second_French_Empire', 'al-Qaeda', 'Greek_Orthodox_Church', 'Patriot', 'Union', 'Ethiopian_Empire', 'Taliban', 'Mughal_Empire', 'Macedonia']
+
+Relation:/music/artist/origin
+Possible destinations['Bellshill', 'Venice', 'Salford,_Greater_Manchester', 'Marylebone', 'Haifa', 'Greenwich_Village', 'Harlem', 'Hemel_Hempstead', 'Chiswick', 'Brixton', 'Colchester']
+
+Relation:/music/genre/artists
+Possible destinations['Band_Aid', 'The_Mothers_of_Invention', 'The_Fall']
+
+Relation:/music/genre/parent_genre
+Possible destinations['Cabaret', 'African_popular_music', 'Samba']
+
+Relation:/music/group_member/membership./music/group_membership/group
+Possible destinations['Band_Aid', 'The_Mothers_of_Invention']
+
+Relation:/music/performance_role/regular_performances./music/group_membership/group
+Possible destinations['The_Mothers_of_Invention', 'Band_Aid', 'The_Fall']
+
+Relation:/music/record_label/artist
+Possible destinations['The_Fall', 'The_Mothers_of_Invention']
+
+Relation:/olympics/olympic_participating_country/medals_won./olympics/olympic_medal_honor/medal
+Possible destinations['Bronze_medal', 'Silver_medal', 'Gold_medal']
+
+Relation:/organization/organization/child./organization/organization_relationship/child
+Possible destinations['ABC1', 'Northrop_Grumman_Shipbuilding', 'This_TV', 'Conservative_Party_of_Canada', 'Royal_Canadian_Air_Force', 'Canadian_Army']
+
+Relation:/organization/organization/headquarters./location/mailing_address/citytown
+Possible destinations['Colchester', 'Bath', 'Bryn_Mawr', 'Varanasi', 'Birkenhead', 'Boulogne-Billancourt', 'Marylebone', 'Canterbury']
+
+Relation:/organization/organization_founder/organizations_founded
+Possible destinations['Royal_Society', 'Red_Army', 'Schutzstaffel', 'U.S._National_Park_Service', 'Band_Aid', 'Waffen-SS', 'Royal_Naval_Air_Service', 'Wehrmacht', 'Continental_Army']
+
+Relation:/organization/organization_member/member_of./organization/organization_membership/organization
+Possible destinations['African_Development_Bank', 'Royal_Society']
+
+Relation:/people/deceased_person/place_of_burial
+Possible destinations['Westwood_Village_Memorial_Park_Cemetery', 'Forest_Lawn_Memorial_Park', 'Westminster_Abbey', 'Forest_Lawn_Memorial_Park', 'Basilica_of_St_Denis', 'Hollywood_Forever_Cemetery', 'Holy_Cross_Cemetery', 'Woodlawn_Cemetery', 'Golders_Green_Crematorium', 'Kensal_Green_Cemetery', 'Tarzana']
+
+Relation:/people/deceased_person/place_of_death
+Possible destinations['Woodland_Hills', 'Marylebone', 'Tarzana', 'Medina', 'Chelsea', 'Guildford', 'Canterbury', 'Maidstone', 'Venice', 'Brittany', 'Hampstead']
+
+Relation:/people/ethnicity/languages_spoken
+Possible destinations['Australian_English', 'Filipino_language']
+
+Relation:/people/person/employment_history./business/employment_tenure/company
+Possible destinations['Royal_Navy', 'United_States_Air_Force-GB', 'Davis_Entertainment', 'United_States_Navy', 'Royal_Society', 'Royal_Air_Force']
+
+Relation:/people/person/gender
+Possible destinations['Male', 'Female']
+
+Relation:/people/person/place_of_birth
+Possible destinations['Harlem', 'Woodland_Hills', 'Sialkot', 'Northampton', 'Marylebone', 'Chiswick', 'Greenwich_Village', 'Bury_St_Edmunds', 'Boulogne-Billancourt', 'Paddington', 'Southport', 'Islington', 'Neath', 'Hampstead', 'Haifa', 'Chelsea', 'Ludhiana', 'Salford,_Greater_Manchester', 'Kirkcaldy', 'South_Shields', 'Bath', 'Carlisle,_Cumbria', 'Dover', 'Brixton', 'Epsom', 'Ealing', 'Greenwich', 'Canterbury', 'Tarzana', 'Solihull', 'Stepney', 'Guildford', 'Varanasi', 'Gateshead', 'Bryn_Mawr', 'Lambeth', 'Harrow,_London', 'Torquay', 'Camberwell', 'Coimbatore', 'Jalandhar', 'Nantes', 'Ilford', 'Agra', 'Birkenhead', 'Scarborough,_North_Yorkshire', 'West_Bromwich', 'Dunfermline']
+
+Relation:/people/person/places_lived./people/place_lived/location
+Possible destinations['Hampstead', 'Varanasi', 'Camberwell', 'Toulouse', 'Venice', 'Greenwich_Village', 'Bath', 'Ludhiana', 'Colchester', 'Paddington', 'Scarborough,_North_Yorkshire', 'Solihull', 'Richmond,_London', 'Chiswick', 'Brittany', 'Jalandhar', 'Dover', 'Islington', 'Harlem', 'Sialkot', 'Kobe', 'Agra', 'Salford,_Greater_Manchester', 'Cairns', 'Chelsea', 'Woodland_Hills', 'Bellshill', 'Bangor', 'Kettering', 'Nantes', 'Hemel_Hempstead', 'Bedford']
+
+Relation:/people/person/profession
+Possible destinations['Theatrical_producer', 'Film_Producer-GB', 'Writer-GB', 'Film_Director', 'Artist-GB', 'Businessperson-GB', 'Comedian', 'Warlord', 'Athlete', 'Television_Director', 'Cinematographer-GB', 'Lawyer', 'Presenter-GB', 'Model', 'Animation_Director', 'Politician-GB', 'Disc_jockey-GB', 'Commentator', 'Physician', 'Scientist-GB', 'Set_decorator-GB', 'Historian', 'Investor', 'Teacher-GB', 'Soldier-GB', 'Engineer-GB', 'Radio_personality-GB', 'Army_officer-GB', 'Economist', 'Motivational_speaker-GB', 'Critic', 'Fighter_pilot-GB', 'Chef', 'Activism', 'Music_executive-GB', 'Sound_Editor-GB', 'Librarian', 'Carpenter-GB', 'Priest-GB', 'Stunt_performer-GB', 'Restaurateur', 'Sailor', 'Special_Effects_Supervisor', 'Chief_of_police-GB', 'Clown', 'Pastor', 'Socialite-GB', 'Sheriff', 'Promoter', 'Official-GB', 'Magician', 'Makeup_Artist-GB', 'Estate_agent-GB', 'Business_magnate-GB', 'Sound_Mixer', 'Prime_Minister_of_Canada']
+
+Relation:/people/person/religion
+Possible destinations['Methodism', 'Catholicism', 'Presbyterianism', 'Atheism', 'Religious_Society_of_Friends', 'Anglicanism', 'Agnosticism', 'Episcopal_Church', 'Churches_of_Christ', 'Paganism', 'Lutheranism', 'Southern_Baptist_Convention', 'Theravada', 'Mormonism', 'Evangelicalism', 'Nondenominational_Christianity', 'Unitarian_Universalism', 'Baptists', 'Church_of_England', 'Christian_Unitarianism', 'Sunni_Islam', 'Sephardic_Judaism', 'Pentecostalism', 'Calvinism', 'Congregational_church', 'United_Methodist_Church', 'Church_of_Scotland', 'Christian']
+
+Relation:/people/person/spouse_s./people/marriage/location_of_ceremony
+Possible destinations['Greenwich', 'Marylebone', 'Westminster_Abbey', 'Chelsea', 'Guildford']
+
+Relation:/people/profession/specialization_of
+Possible destinations['Priest-GB', 'Scientist-GB', 'Clergy', 'Model', 'Writer-GB', 'Businessperson-GB', 'Presenter-GB', 'Athlete', 'Engineer-GB', 'Official-GB', 'Artist-GB', 'Politician-GB', 'Lawyer', 'Soldier-GB', 'Librarian', 'Film_Director', 'Physician', 'Army_officer-GB', 'Media', 'Music_executive-GB', 'Critic']
+
+Relation:/sports/sports_team/colors
+Possible destinations['White', 'Blue', 'Grey', 'Yellow', 'Black', 'Orange', 'Navy_Blue', 'Silver', 'Maroon', 'Cardinal', 'Green', 'Gold', 'Columbia_blue', 'Purple', 'Old_gold', 'Royal_blue', 'Burgundy', 'Crimson', 'Scarlet']
+
+Relation:/sports/sports_team/sport
+Possible destinations['College_basketball', 'Australian_rules_football', 'Rugby_league']
+
+Relation:/time/event/instance_of_recurring_event
+Possible destinations['United_States_presidential_election', 'Tour_de_France']
+
+Relation:/tv/tv_program/genre
+Possible destinations['Action', 'Comedy-GB', 'Historical_fiction', 'Supernatural', 'Legal_drama', 'Animated_cartoon', 'Sitcom', 'Soap_opera', 'Anthology', 'Variety_show', "Children's_television_series", 'Animated_series', 'Comedy-drama', 'Live_action', 'Detective_fiction', 'News', 'Professional_wrestling', 'Anime', 'Space_opera', 'Game_show', 'Puppet', 'Interactive_television', 'Medical_fiction', 'Police_procedural', 'Crime_Fiction', 'Anthology_series', 'Talent_show', 'Action_Film', 'Stop_motion', 'Sketch_comedy', 'Parody', 'Docudrama', 'Television_comedy', 'Farce', 'Superhero_movie', 'Non-fiction', 'Short_Film', 'Chat_show-GB', 'Costume_drama', 'Steampunk', 'Romantic_comedy', 'Spy_film', 'Cooking_show', 'Educational_television', 'Neo-noir', 'News_program', 'Television_special', 'Apocalyptic_and_post-apocalyptic_fiction']
+

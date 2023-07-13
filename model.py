@@ -7,7 +7,21 @@ import random
 import numpy as np
 
 
-FEATURES_DIM = 2#4231#3066#6##
+FEATURES_DIM = 100#4231#3066#6##
+from torch.utils.data import Dataset
+
+# Definizione di un dataset personalizzato
+class MyDataset(Dataset):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __len__(self):
+        return len(self.x)
+
+    def __getitem__(self, idx):
+        return self.x[idx], self.y[idx]
+    
 
 class InputLayer(torch.nn.Module):
     def __init__(self, weights):
@@ -142,9 +156,8 @@ from mp_rgcn_layer import *
 
 
 class Net(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, n_layers, metapath_length):
+    def __init__(self, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath_length):
         super().__init__()
-        self.n_layers = n_layers
         self.metapath_length = metapath_length
 
         self.conv1 = RGCNConv(input_dim, hidden_dim, num_rel, flow='target_to_source') 
@@ -199,34 +212,36 @@ class MPNetm(torch.nn.Module):
         super().__init__()
         self.n_metapaths = n_metapaths
         self.metapaths = metapaths
-
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
         self.layers_list = torch.nn.ModuleList()
-        
+
         for i in range(0, len(metapaths)):
             convs = torch.nn.ModuleList()
-            convs.append(CustomRGCNConv(input_dim, hidden_dim, num_rel, flow='target_to_source'))
+            convs.append(CustomRGCNConv(self.input_dim, self.hidden_dim, 1, flow='target_to_source'))
             for j in range(0, len(metapaths[i])-1):
-                convs.append(CustomRGCNConv(hidden_dim, hidden_dim, num_rel, flow='target_to_source'))
+                convs.append(CustomRGCNConv(self.hidden_dim, self.hidden_dim, 1, flow='target_to_source'))
             self.layers_list.append(convs)
         
-        self.fc1 = torch.nn.Linear(hidden_dim * len(metapaths), hidden_dim)
-        self.fc2 = torch.nn.Linear(hidden_dim, ll_output_dim)
+        self.fc1 = torch.nn.Linear(self.hidden_dim * len(metapaths), self.hidden_dim)
+        self.fc2 = torch.nn.Linear(self.hidden_dim, ll_output_dim)
         self.log_softmax = torch.nn.LogSoftmax(dim=1)
         #self.softmax = torch.nn.Softmax(dim=1)
 
-        #self.dropout1 = nn.Dropout(0.5)
-        #self.dropout2 = nn.Dropout(0.5) #togli p
+        self.dropout = nn.Dropout(0.5)
+        self.dropout2 = nn.Dropout(0.5)
 
     def forward(self, x, edge_index, edge_type):
         
         embeddings = []
         for i in range(0, len(self.metapaths)):
             for layer_index in range(0, len(self.metapaths[i])):
+                #x = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], x, edge_index, edge_type))
                 if layer_index == 0:
-                    h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], x, edge_index, edge_type))
-                    #h = self.dropout1(h)
+                    h = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], x, edge_index, edge_type))
+                    #h = self.dropout(h)
                 else:
-                    h = F.relu(self.layers_list[i][layer_index](self.metapaths[i][layer_index], h, edge_index, edge_type))
+                    h = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], h, edge_index, edge_type))
                     #h = self.dropout2(h)
             embeddings.append(h)
 
@@ -240,6 +255,7 @@ class MPNetm(torch.nn.Module):
         #h = F.relu(self.fc2(h))
         h = self.fc2(h)
         h = self.log_softmax(h)
+        #print('x ', x, x.size())
         return h
 
 

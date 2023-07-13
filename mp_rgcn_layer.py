@@ -95,7 +95,7 @@ class CustomRGCNConv(MessagePassing):
         num_relations: int,
         num_bases: Optional[int] = None,
         num_blocks: Optional[int] = None,
-        aggr: str = 'mean',
+        aggr: str = 'sum',#'mean',
         root_weight: bool = True,
         bias: bool = True,
         **kwargs,
@@ -133,7 +133,7 @@ class CustomRGCNConv(MessagePassing):
 
         else:
             self.weight = Parameter(
-                torch.Tensor(num_relations, in_channels[0], out_channels))
+                torch.Tensor(in_channels[0], out_channels))
             self.register_parameter('comp', None)
 
         if root_weight:
@@ -155,7 +155,7 @@ class CustomRGCNConv(MessagePassing):
         zeros(self.bias)
 
 
-    def forward(self, relation, x: Union[OptTensor, Tuple[OptTensor, Tensor]],
+    def forward(self, layer_num, relation, x: Union[OptTensor, Tuple[OptTensor, Tensor]],
                 edge_index: Adj, edge_type: OptTensor = None):
         r"""
         Args:
@@ -176,12 +176,14 @@ class CustomRGCNConv(MessagePassing):
         # Convert input features to a pair of node features or node indices.
         x_l: OptTensor = None
         if isinstance(x, tuple):
+            # no
             x_l = x[0]
         else:
+            # yes
             x_l = x
         if x_l is None:
+            # no
             x_l = torch.arange(self.in_channels_l, device=self.weight.device)
-
         x_r: Tensor = x_l
         if isinstance(x, tuple):
             x_r = x[1]
@@ -227,12 +229,22 @@ class CustomRGCNConv(MessagePassing):
                 Here we only consider edge_type == relation passed as argument in the forward
                 '''
                 tmp = masked_edge_index(edge_index, edge_type == relation) 
-
+                #print('tmp ', tmp)
                 if x_l.dtype == torch.long:
                     out += self.propagate(tmp, x=weight[relation, x_l], size=size)
                 else:
                     h = self.propagate(tmp, x=x_l, size=size)
-                    out = out + (h @ weight[relation])
+                    #print('xl ', x_l, x_l.size())
+                    #print('------')
+                    
+                    #print('h ', h, h.size())
+                    #print('weight ', weight, weight.size())
+                    #print('relation ', relation)
+                    #print('weight ', weight, weight.size())
+                    
+                    out = out + (h @ weight)
+                    out = out.squeeze()
+                    
             
             else:  # No regularization/Basis-decomposition ========================
                 for i in range(self.num_relations):
@@ -246,12 +258,16 @@ class CustomRGCNConv(MessagePassing):
                         out = out + (h @ weight[i])
 
         root = self.root
+        '''if layer_num != 0:
+            out += root[x_r] if x_r.dtype == torch.long else x_r @ root
+        '''
         if root is not None:
             out += root[x_r] if x_r.dtype == torch.long else x_r @ root
-
+        
         if self.bias is not None:
             out += self.bias
 
+        #print('out ', out)
         return out
 
 

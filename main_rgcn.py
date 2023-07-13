@@ -37,6 +37,15 @@ def masked_edge_index(edge_index, edge_mask):
         return edge_index[:, edge_mask]
     else:
         return print('Error')
+    
+def mask_features_test_nodes(test_index, val_index, train_index, feature_matrix):
+    for indice in test_index:
+        feature_matrix[indice] = torch.zeros_like(feature_matrix[indice])
+    for indice in val_index:
+        feature_matrix[indice] = torch.zeros_like(feature_matrix[indice])
+    for indice in train_index:
+        feature_matrix[indice] = torch.zeros_like(feature_matrix[indice])
+    return feature_matrix
 
 def one_hot_encoding(l):
     label_types = torch.unique(l).tolist()
@@ -66,25 +75,40 @@ def node_types_and_connected_relations(data, BAGS):
     #    rels = torch.unique(data.edge_type).tolist()
     return rels
     
-def load_files_fb15k237(node_file_path, link_file_path, label_file_path, dataset):
-    colors = pd.read_csv(node_file_path, sep='\t', header = None)
-    colors = colors.dropna(axis=1,how='all')
-    labels = pd.read_csv(label_file_path, sep='\t', header = None)
+def load_files_fb15k237(node_file_path, link_file_path, label_file_path, relations_legend_path):
+    # node features
+    features = pd.read_csv(node_file_path, sep='\t', header = None)
+    features = features.dropna(axis=1,how='all')
+    features.rename(columns = {0: 'node', 1: 'features'}, inplace = True)
+
+    # Labels
+    labels_df = pd.read_csv(label_file_path, sep='\t', header = None)
+    labels_df.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
+    labels = torch.tensor(labels_df['label'].values)
+
+    # Links
     links = pd.read_csv(link_file_path, sep='\t', header = None)
-    labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
-    source_nodes_with_labels = labels['node'].values.tolist()
-    labels = torch.tensor(labels['label'].values)
-    colors.rename(columns = {0: 'node', 1: 'color'}, inplace = True)
     links.rename(columns = {0: 'node_1', 1: 'relation_type', 2: 'node_2'}, inplace = True)
-    num_relations = len(list(set(links['relation_type'].to_list())))
-    new_l = []
-    for i in range(0, len(labels)):
-        if labels[i].item() == 1:
-            new_l.append(1)
-        else:
-            new_l.append(0)
-    new_l = torch.tensor(new_l)
-    return labels, colors, links, source_nodes_with_labels, num_relations, new_l
+    
+    # Nodes with labels mask
+    source_nodes_with_labels = labels_df['node'].values.tolist()
+   
+    # Total number of relation types
+    tot_relation_types = len(list(set(links['relation_type'].to_list())))
+
+    # If not binary classification then for score function need to make it binary.
+    # 1 class vs others
+    if len(torch.unique(labels).tolist()) > 2:
+        binary_labels = []
+        for i in range(0, len(labels)):
+            if labels[i].item() == 1:
+                binary_labels.append(1)
+            else:
+                binary_labels.append(0)
+        binary_labels = torch.tensor(binary_labels)
+    else:
+        binary_labels = labels
+    return labels, features, links, source_nodes_with_labels, tot_relation_types, binary_labels
 
 def load_files_dblp(node_file_path, link_file_path):
 
@@ -328,12 +352,6 @@ def get_node_features(colors):
     x = torch.from_numpy(x) 
     return x
 
-def mask_features_test_nodes(test_index, val_index, feature_matrix):
-    for indice in test_index:
-        feature_matrix[indice] = torch.zeros_like(feature_matrix[indice])
-    for indice in val_index:
-        feature_matrix[indice] = torch.zeros_like(feature_matrix[indice])
-    return feature_matrix
 
 
 def get_edge_index_and_type_no_reverse(links):
@@ -406,11 +424,11 @@ def mpgnn_test(model, data, class_weight):
     test_predictions = torch.argmax(pred[data.test_idx], 1).tolist()
     test_y = data.test_y.tolist()
     f1_test_micro = f1_score(test_predictions, test_y, average = 'macro')
-    print(test_predictions)
+    '''print(test_predictions)
     print(test_y)
     print('param: ')
     for n, p in model.named_parameters():
-        print(n, p)
+        print(n, p)'''
     return loss_test, f1_test_micro
 
 # def mpgnn_parallel(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath):
@@ -432,7 +450,6 @@ def mpgnn_test(model, data, class_weight):
 #     return best_micro
 
 def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath_length):
-    
     mpgnn_model = Net(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath_length)
     # for name, param in mpgnn_model.named_parameters():
     #     print(name, param, param.size())
@@ -440,33 +457,29 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
     best_macro, best_micro = 0., 0.
     for epoch in range(1, 1000):
         loss, class_weight = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
-        train_acc, f1_val_micro, f1_valt_macro, loss_val = mpgnn_validation(mpgnn_model, data_mpgnn, class_weight)
-        if f1_val_micro > best_micro:
-            best_micro = f1_val_micro
+        train_acc, f1_val_micro, f1_val_macro, loss_val = mpgnn_validation(mpgnn_model, data_mpgnn, class_weight)
+        test_loss, f1_micro_test = mpgnn_test(mpgnn_model, data_mpgnn, class_weight)
+        if f1_val_macro > best_micro:
+            best_micro = f1_val_macro
             best_model = mpgnn_model
-        if epoch % 100 == 0:
+        if epoch % 10 == 0:
             print(epoch, "train loss %0.3f" % loss, "validation loss %0.3f" % loss_val,
-                  'train micro: %0.3f'% train_acc, 'validation micro: %0.3f'% f1_val_micro)
+                  'train micro: %0.3f'% train_acc, 'validation micro: %0.3f'% f1_val_micro,
+                  'test micro: %0.3f'% f1_micro_test)
             
     test_loss, f1_micro_test = mpgnn_test(best_model, data_mpgnn, class_weight)
     print("test loss %0.3f" % test_loss, "test micro %0.3f" % f1_micro_test)
     return f1_micro_test
 
 
-
-def main(node_file_path, link_file_path, label_file_path, embedding_file_path, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset, dataset_path):
-    # MPI variables
-    comm = MPI.COMM_WORLD
-    size = comm.Get_size()
-    rank = comm.Get_rank()
-
-    if rank == 0:
+def main(node_file_path, link_file_path, label_file_path, hidden_dim, output_dim, dataset, dataset_path, metapath_length):
         print(dataset)
+        embedding_file_path = None
         # Obtain true 0|1 labels for each node, feature matrix (1-hot encoding) and links among nodes
         if dataset == 'complex' or dataset == 'simple':
             sources = []
             true_labels, features, edges, embedding = load_files(node_file_path, link_file_path, label_file_path, embedding_file_path, dataset)
-        elif dataset == 'fb15k237':
+        elif dataset == 'fb15k-237':
             true_labels, features, edges, sources, num_rel, labels_multi = load_files_fb15k237(node_file_path, link_file_path, label_file_path, dataset)
         elif dataset == 'dblp' or dataset == 'imdb':
             true_labels, features, edges, sources, num_rel, labels_multi, train_idx, train_y, val_idx, val_y, test_idx, test_y = load_files_dblp(node_file_path, link_file_path)
@@ -475,10 +488,9 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         # Get features' matrix
         x = get_node_features(features)
         
-        if dataset == 'fb15k237' or dataset == 'dblp' or dataset == 'imdb' :
+        if dataset == 'fb15k-237':
             input_dim = len(x[0])
             ll_output_dim = len(torch.unique(true_labels).tolist())
-
 
         # Get edge_index and types
         edge_index, edge_type = get_edge_index_and_type_no_reverse(edges)
@@ -488,7 +500,8 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
             node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(true_labels, features, sources, dataset)
         #node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y = splitting_node_and_labels(labels_multi, features, sources, dataset)
         
-  
+        x = mask_features_test_nodes(train_idx, val_idx, test_idx, x)
+        print(x[train_idx[0]])
         # Dataset for MPGNN
         data_rgcn = Data()
         data_rgcn.x = x
@@ -507,7 +520,7 @@ def main(node_file_path, link_file_path, label_file_path, embedding_file_path, m
         else:
             source_nodes_mask = []
         metapath = []
-
+        print('training started...')
         mpgnn_f1_micro = mpgnn_parallel_multiple(data_rgcn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapath_length)
 
 
@@ -515,86 +528,23 @@ if __name__ == '__main__':
 
     
     EPOCHS = 200
-    COMPLEX = True
+    COMPLEX = 'fb15k-237'
     RESTARTS = 5
     NEGATIVE_SAMPLING = False
 
-    metapath_length= 4
-    metapaths_number = 1
-    tot_rel=3
-    deterministic = True
-    hidden_dim = 32
-    #num_rel = 4
-    #num_rel = 8
-    #num_rel = 10
-    num_rel = 15
-    output_dim = 64
-
-    d = 'overlap_3_rels_3/'
-
-
-    aggregation= 'max'
-    epochs_relations = 150
-    epochs_train = 150
-    if COMPLEX == True:
-        input_dim = 2
-        ll_output_dim = 2
-        dataset = "simple"
-        if deterministic:
-            folder = '/Users/francescoferrini/VScode/MultirelationalGNN/data/final_datasets/metapath_length_4/' + d
-        #folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/length_m_" + str(metapath_length) + "__tot_rel_" + str(tot_rel) + "/"
-        else:
-            folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/synthetic/"+ "tot_rel_" + str(tot_rel) + '_metapaths_number_' + str(metapaths_number) + '_metapath_length_' + str(metapath_length) + "/"
-    elif COMPLEX == False:
-        input_dim = 3
-        ll_output_dim = 2
-        dataset = "simple"
-        #folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/length_m_" + str(metapath_length) + "__tot_rel_" + str(tot_rel) + "/"
-        folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"+ "tot_rel_" + str(tot_rel) + "/"
-    elif COMPLEX == 'IMDB':
-        tot_rel=4
-        input_dim = 3066
-        ll_output_dim = 3
-        dataset = 'IMDB' ## 5
-        folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"
-    elif COMPLEX == 'DBLP':
-        input_dim = 4231
-        tot_rel=6
-        ll_output_dim = 4
-        dataset = 'DBLP' ## 7
-        folder= "/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"
-    elif COMPLEX == 'synthetic_multi':
-        input_dim=6
-        tot_rel=5
-        ll_output_dim=2
-        dataset = 'tot_rel_5'
-        folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/synthetic_multi/" + dataset + "/"
-    elif COMPLEX == 'fb15k237':
-        input_dim=55
-        tot_rel= 227
-        ll_output_dim= 2
-        dataset = 'fb15k237'
-        folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"
-    elif COMPLEX == 'dblp':
-        input_dim=55
-        tot_rel= 227
-        ll_output_dim= 2
-        dataset = 'dblp'
-        folder="/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/"
+    hidden_dim=64
+    output_dim=hidden_dim
+    dataset = 'fb15k-237'
+    folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"
     
-    node_file= folder + "node.dat"
+    node_file= folder + "node_bow.dat"
     link_file= folder + "link.dat"
     label_file= folder + "label.dat"
-    embedding_file = folder + "embedding.dat"
+    relations_legend_file = folder + 'relations_legend.dat'
     # Define the filename for saving the variables
     pickle_filename = folder + "iteration_variables.pkl"
     # mpgnn variables
-    hidden_dim = 32
-    num_rel = tot_rel
-    output_dim = 32
-
-    dataset_path = '/Users/francescoferrini/VScode/Graph_Transformer_Networks/data/synthetic/'+ "tot_rel_" + str(tot_rel) + '_metapaths_number_' + str(metapaths_number) + '_metapath_length_' + str(metapath_length) + "/"
+    meta_length=3
     
-    meta = main(node_file, link_file, label_file, embedding_file, metapath_length, pickle_filename, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, dataset, dataset_path)
-
+    meta = main(node_file, link_file, label_file, hidden_dim, output_dim, dataset, folder, meta_length)
 
