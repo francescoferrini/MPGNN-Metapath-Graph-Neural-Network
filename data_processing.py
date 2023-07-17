@@ -53,10 +53,11 @@ print(relation_list)
 # specifico la relazione che diventa label/attributo.    /music/group_member/membership./music/group_membership/group
 #relation = '/people/person/gender'
 #relation = '/education/university/international_tuition./measurement_unit/dated_money_value/currency'
-#relation = '/education/university/domestic_tuition./measurement_unit/dated_money_value/currency'
+#relation = '/education/university/domestic_tuition./measurement_unit/dated_money_value/currency' # no
 #relation = '/base/biblioness/bibs_location/state/continent'
 #relation = '/people/person/place_of_birth/continent'
-relation = '/organization/endowed_organization/endowment./measurement_unit/dated_money_value/currency'
+#relation = '/location/statistical_region/gdp_nominal_per_capita./measurement_unit/dated_money_value/currency'
+relation = '/base/schemastaging/person_extra/net_worth./measurement_unit/dated_money_value/currency'
 #relation = '/sports/sports_team/sport'
 #relation = '/base/schemastaging/person_extra/net_worth./measurement_unit/dated_money_value/currency'
 #relation = '/time/event/instance_of_recurring_event'

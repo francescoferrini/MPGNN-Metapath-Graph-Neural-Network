@@ -4,6 +4,8 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.loader import ClusterData, ClusterLoader, NeighborSampler
 import torch.nn.functional as F
 
+from collections import Counter
+
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -36,6 +38,11 @@ from torch_geometric.nn import MLP
 seed= 30
 torch.manual_seed(seed)
 C = 0
+
+def valore_piu_frequente(lista):
+    conteggio = Counter(lista)
+    valore_piu_comune = conteggio.most_common(1)[0][0]
+    return valore_piu_comune
 
 def masked_edge_index(edge_index, edge_mask):
     if isinstance(edge_index, Tensor):
@@ -94,6 +101,8 @@ def load_files_fb15k237(node_file_path, link_file_path, label_file_path, relatio
 
     # If not binary classification then for score function need to make it binary.
     # 1 class vs others
+    valore_frequente = valore_piu_frequente(labels.tolist())
+    print('value: ', valore_frequente)
     if len(torch.unique(labels).tolist()) > 2:
         binary_labels = []
         for i in range(0, len(labels)):
@@ -1093,8 +1102,8 @@ def mpgnn_test(model, data, class_weight):
     
     test_predictions = torch.argmax(pred[data.test_idx], 1).tolist()
     test_y = data.test_y.tolist()
-    print('test predictions: ', test_predictions)
-    print('test y: ', test_y)
+    #print('test predictions: ', test_predictions)
+    #print('test y: ', test_y)
     f1_test_micro = f1_score(test_predictions, test_y, average = 'macro')
     #print('preds', test_predictions)
     #print('test y', test_y)
@@ -1130,7 +1139,7 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
    #metapaths = [[129, 173], [4], [39], [120]]
     #metapaths = [[175, 62]]
     #metapaths = [[107, 165, 15], [165, 15], [165, 121], [165, 75], [51, 165], [107, 188]]
-    metapaths = [[210, 77], [210, 53]]
+    #metapaths = [[225, 194], [190, 194], [190]]
     print('METAPATHS: ', metapaths)
     mpgnn_model = MPNetm(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapaths), metapaths)
     # for name, param in mpgnn_model.named_parameters():
@@ -1139,17 +1148,18 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
     best_macro, best_micro = 0., 0.
     for epoch in range(1, 1000):
         loss, class_weight = mpgnn_train(mpgnn_model, mpgnn_optimizer, data_mpgnn)
-        train_acc, f1_val_micro, f1_valt_macro, loss_val = mpgnn_validation(mpgnn_model, data_mpgnn, class_weight)
-        if f1_val_micro > best_micro:
-            best_micro = f1_val_micro
+        train_acc, f1_val_macro, f1_valt_macro, loss_val = mpgnn_validation(mpgnn_model, data_mpgnn, class_weight)
+        if f1_val_macro > best_micro:
+            best_micro = f1_val_macro
             best_model = mpgnn_model
-        if epoch % 100 == 0:
+        '''if epoch % 100 == 0:
             print(epoch, "train loss %0.3f" % loss, "validation loss %0.3f" % loss_val,
-                  'train micro: %0.3f'% train_acc, 'validation micro: %0.3f'% f1_val_micro)
+                  'train micro: %0.3f'% train_acc, 'validation micro: %0.3f'% f1_val_micro)'''
             
     test_loss, f1_micro_test = mpgnn_test(best_model, data_mpgnn, class_weight)
-    print("test loss %0.3f" % test_loss, "test micro %0.3f" % f1_micro_test)
-    return f1_micro_test
+    #print("test loss %0.3f" % test_loss, "test micro %0.3f" % f1_micro_test)
+    print("val loss %0.3f" % loss_val, "val macro %0.3f" % f1_val_macro)
+    return f1_valt_macro#f1_micro_test
 
 def find_smallest_values(accuracies_list):
     # Creazione del modello DBSCAN
@@ -1292,7 +1302,7 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
         
         if dataset == 'fb15k-237':
             input_dim = len(x[0])
-            print('x ', x.size(), input_dim)
+            #print('x ', x.size(), input_dim)
             ll_output_dim = len(torch.unique(true_labels).tolist())
         if MLP_VAR == True:
             mlp_train(x, sources, true_labels)
@@ -1381,7 +1391,7 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
     # Ogni processo figlio invia il risultato al processo padre
     result = comm.gather(p_result, root=0)
     if rank == 0:
-       print('local: ', local_relations)
+       #print('local: ', local_relations)
        final_result = sum(result, [])
 
     if rank == 0:
@@ -1447,7 +1457,8 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
     current_metapaths_list = comm.bcast(current_metapaths_list, root=0)
     current_metapaths_dict = comm.bcast(current_metapaths_dict, root=0)
     #'''
-    while current_metapaths_list:
+    #while current_metapaths_list:
+    for k in range(4):
         for i in range(0, len(current_metapaths_list)):
             #print('-----------------------NEXT-----------------------', i , len(current_metapaths_list), current_metapaths_list, type(data), data)
             if rank == 0:
@@ -1456,12 +1467,13 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
                 create_bags(current_metapaths_dict[str(current_metapaths_list[i])][2], current_metapaths_dict[str(current_metapaths_list[i])][3], current_metapaths_dict[str(current_metapaths_list[i])][4])
                 actual_relations = node_types_and_connected_relations(current_metapaths_dict[str(current_metapaths_list[i])][4], BAGS=True)
                 print('actual : ', len(actual_relations))
+            actual_relations = comm.bcast(actual_relations, root=0)
                 #print('bags: ', data.bags)
             
             # check whether there are relations
             
-            if actual_relations:
-
+            if len(actual_relations) > 0:
+                #print('acutal ;; ', rank, len(actual_relations), actual_relations)
                 # Il processo padre invia i dati ai processi figli
                 actual_data = comm.bcast(current_metapaths_dict[str(current_metapaths_list[i])][4], root=0)
                 actual_relations = comm.bcast(actual_relations, root=0)
@@ -1481,7 +1493,7 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
                 result = comm.gather(p_result, root=0)
 
                 if rank == 0:
-                    print('local ', local_relations)
+                    #print('local ', local_relations)
                     at_least_one = False
                     arr = []
                     bool = False
@@ -1495,9 +1507,9 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
                     array_differenze = np.diff(arr)
                     if len(array_differenze) > 2:
                         indice = np.argmax(array_differenze)
-                    else:
+                    '''else:
                         indice = 0
-                        arr[indice] = array_differenze[indice]
+                        arr[indice] = array_differenze[indice]'''
                     #print('threshold: ', arr[indice])
                     # relation, loss.item(), model, predictions_for_each_restart
                     count = 0
@@ -1505,7 +1517,7 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
                     for j in range(0, len(final_result)):
                         data_copy = copy.copy(current_metapaths_dict[str(current_metapaths_list[i])][4])
                         #print('relation', final_result[j][0], 'score: ', final_result[j][1])
-                        if final_result[j][1] <= arr[indice]: #np.mean([t[1] for t in final_result]): #0.01:
+                        if (len(array_differenze) > 2 and final_result[j][1] < arr[indice]) or len(array_differenze) == 0: #np.mean([t[1] for t in final_result]): #0.01:
                         #if final_result[j][1] <= 0.02:
                             tmp_meta = current_metapaths_list[i].copy()
                             tmp_meta.insert(0, final_result[j][0])
@@ -1516,7 +1528,15 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
                                 current_metapaths_list = []
                                 intermediate_metapaths_list = []
                             else:
-                                if count == 0: 
+                                current_metapaths_list.append(tmp_meta)
+                                predictions_for_each_restart = retrain_bags(data_copy, final_result[j][0], final_result[j][3], BAGS=True)
+                                source_nodes_mask, new_labels = relabel_nodes_inside_bags(predictions_for_each_restart, data_copy, final_result[j][2])
+                                edg_dictionary, dest_dictionary  = create_edge_dictionary(data_copy, final_result[j][0], source_nodes_mask, BAGS=False)
+                                new_edge_dictionary, new_dest_dictionary = clean_dictionaries(data_copy, edg_dictionary, dest_dictionary, final_result[j][2])
+                                current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], mpgnn_f1_micro, new_edge_dictionary, new_dest_dictionary, data_copy]
+
+                                
+                                '''if count == 0: 
                                     if mpgnn_f1_micro > current_metapaths_dict[str(current_metapaths_list[i])][1] and tmp_meta not in intermediate_metapaths_list:
                                         print('better ', count)
                                         intermediate_metapaths_list.append(tmp_meta)
@@ -1526,12 +1546,10 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
                                         edg_dictionary, dest_dictionary  = create_edge_dictionary(data_copy, final_result[j][0], source_nodes_mask, BAGS=False)
                                         new_edge_dictionary, new_dest_dictionary = clean_dictionaries(data_copy, edg_dictionary, dest_dictionary, final_result[j][2])
                                         current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], mpgnn_f1_micro, new_edge_dictionary, new_dest_dictionary, data_copy]
-                                        #current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], final_result[j][1], new_edge_dictionary, new_dest_dictionary]
                                         at_least_one = True
                                         count += 1
                                         best_actual_f1 = mpgnn_f1_micro
                                         old_meta = tmp_meta
-                                        #print(current_metapaths_dict)
                                     elif mpgnn_f1_micro < current_metapaths_dict[str(current_metapaths_list[i])][1] and at_least_one==False and j==len(final_result)-1:
                                         print('worst')
                                         if current_metapaths_list[i] not in final_metapaths_list: final_metapaths_list.append(current_metapaths_list[i])
@@ -1545,13 +1563,11 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
                                         edg_dictionary, dest_dictionary  = create_edge_dictionary(data_copy, final_result[j][0], source_nodes_mask, BAGS=False)
                                         new_edge_dictionary, new_dest_dictionary = clean_dictionaries(data_copy, edg_dictionary, dest_dictionary, final_result[j][2])
                                         current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], mpgnn_f1_micro, new_edge_dictionary, new_dest_dictionary, data_copy]
-                                        #current_metapaths_dict[str(tmp_meta)] = [final_result[j][0], final_result[j][1], new_edge_dictionary, new_dest_dictionary]
                                         at_least_one = True
                                         # remove the previous
                                         intermediate_metapaths_list.remove(old_meta)
                                         old_meta = tmp_meta
                                         best_actual_f1 = mpgnn_f1_micro
-                                        #print(current_metapaths_dict)
                                     elif mpgnn_f1_micro < current_metapaths_dict[str(current_metapaths_list[i])][1] and at_least_one==False and j==len(final_result)-1:
                                         print('worst')
                                         if current_metapaths_list[i] not in final_metapaths_list: final_metapaths_list.append(current_metapaths_list[i])
@@ -1566,18 +1582,7 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
                 current_metapaths_list = intermediate_metapaths_list.copy()
                 intermediate_metapaths_list = []
         current_metapaths_list = comm.bcast(current_metapaths_list, root=0)
-        # If intermediate metapath list is empty it means that the system didn't find any new metapath
-        # intermediate_metapaths_list = comm.bcast(intermediate_metapaths_list, root=0)
-        # if rank == 0:
-        #     print('ci siamo ', intermediate_metapaths_list)
-        #     if not intermediate_metapaths_list:
-        #        return current_metapaths_list
-        #     current_metapaths_list = intermediate_metapaths_list.copy()
-        #     intermediate_metapaths_list = []
-
-        # if not intermediate_metapaths_list:
-        #     return
-
+    
     # final training
     if rank == 0:
         for elm in current_metapaths_list: 
@@ -1587,7 +1592,17 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
         print("Final accuracy: ", mpgnn_f1_micro)
         return mpgnn_f1_micro
     return
-    #'''
+
+    '''
+            else:                        
+                current_metapaths_list = comm.bcast(current_metapaths_list, root=0)
+                current_metapaths_dict = comm.bcast(current_metapaths_dict, root=0)
+    if rank == 0:
+        sorted_dictionary = sorted(current_metapaths_dict.items(), key=lambda x: x[1][1])
+        for i in range(5):
+            print(sorted_dictionary[i][0], sorted_dictionary[i][1 ])
+
+
 
 if __name__ == '__main__':
 

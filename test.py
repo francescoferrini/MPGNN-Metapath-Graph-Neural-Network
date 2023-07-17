@@ -13,75 +13,23 @@ import torch
 from torch_sparse import coalesce
 import networkx as nx
 
+def get_best_keys(dictionary):
+  best_values = sorted(dictionary.values(), reverse=True)[:1]
+  print(best_values)
+  return [key for key, value in dictionary.items() if value in best_values]
+
 def main():
     
 
-    G = nx.petersen_graph()
-
-    print(nx.community.louvain_communities(G, seed=123))
-
-    '''
-    ## Edges
-    path = '/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/edges.pkl'
-    with open(path, "rb") as file:
-        # Caricamento dell'oggetto dal file pickle
-        data = pickle.load(file)
-    triples = []
-    for relation, csc_matrix in enumerate(data):
-        # Estrazione delle righe e colonne non nulle dalla matrice CSC
-        rows, cols = csc_matrix.nonzero()
-
-        # Costruzione delle triple source_node, relation e destination_node
-        for row, col in zip(rows, cols):
-            source_node = row
-            destination_node = col
-            triple = (source_node, relation, destination_node)
-            triples.append(triple)
-
-    # Creazione del DataFrame dalle triple
-    df = pd.DataFrame(triples, columns=['source_node', 'relation', 'destination_node'])
-
-    # Stampa del DataFrame
-    print(df)
-    with open("/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/link.dat", "w") as f:
-        for index, row in df.iterrows():
-            f.write(str(row['source_node']) + '\t' + str(row['relation']) + '\t' + str(row['destination_node']) + '\n')
-        f.close()
-    
-    ## Nodes
-    path = '/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/node_features.pkl'
-    with open(path, "rb") as file:
-        # Caricamento dell'oggetto dal file pickle
-        data = pickle.load(file)
-    with open("/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/node.dat", "w") as f:
-        for i in range(0, len(data)):
-            f.write(str(i) + '\t')
-            for j in range(0, len(data[i])):
-                f.write(str(data[i][j]) + '\t')
-            f.write('\n')
-        f.close()
-    
-    ## Labels
-    path = '/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels.pkl'
-    with open(path, "rb") as file:
-        # Caricamento dell'oggetto dal file pickle
-        data = pickle.load(file)
-    
-    ### train
-    with open("/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_train.dat", "w") as f:
-        for i in range(0, len(data[0])):
-            f.write(str(data[0][i][0]) + '\t' + str(data[0][i][1]) + '\n')
-        f.close()
-    ### validation
-    with open("/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_val.dat", "w") as f:
-        for i in range(0, len(data[1])):
-            f.write(str(data[1][i][0]) + '\t' + str(data[1][i][1]) + '\n')
-        f.close()
-    ### test
-    with open("/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_test.dat", "w") as f:
-        for i in range(0, len(data[2])):
-            f.write(str(data[2][i][0]) + '\t' + str(data[2][i][1]) + '\n')
-        f.close()'''
+    dictionary = {
+        "a": [1, 26, 3, 4],
+        "b": [5, 6, 7, 8],
+        "c": [9, 10, 11, 12],
+        "d": [13, 45, 15, 16],
+        "e": [17, 18, 19, 20],
+    }
+    sorted_dictionary = sorted(dictionary.items(), key=lambda x: x[1][1])
+    print(sorted_dictionary)
     
 if __name__ == '__main__':
     main()
