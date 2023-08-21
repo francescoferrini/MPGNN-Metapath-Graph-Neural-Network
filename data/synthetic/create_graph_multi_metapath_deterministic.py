@@ -34,14 +34,13 @@ def main(args):
 
     # setting the possible colors
     color_list = ['red', 'blue'] # red = 010, blue = 100, green = 001
-
+    
     relations_list = []
     # possible combination of relations
-    if args.colors == 'yes':
     # Create a directory to save files
-        path = '/Users/francescoferrini/VScode/MultirelationalGNN/data/final_datasets/metapath_length_3/overlap_0_rels_0'
-    else: 
-        path = '/Users/francescoferrini/VScode/MultirelationalGNN/data/final_datasets/metapath_length_2/overlap_2_rels_2'
+    data = 'overlap_' + str(args.overlap) + 'rels_' + str(args.shared_relations)
+    path = '/Users/francescoferrini/VScode/MultirelationalGNN/data/synthetic/metapath_length_3/'+data
+
     isExist = os.path.exists(path)
     if not isExist:
         os.makedirs(path)
@@ -52,7 +51,23 @@ def main(args):
     meta_path = path + '/metapath.dat'
 
 
-    diff = 0
+    if args.overlap == 0 and args.shared_relations == 0: diff=0
+    elif args.overlap == 0 and args.shared_relations ==1: diff=1
+    elif args.overlap == 0 and args.shared_relations ==2: diff=2
+    elif args.overlap == 0 and args.shared_relations ==3: diff=3
+    elif args.overlap == 1 and args.shared_relations ==0: diff=4
+    elif args.overlap == 1 and args.shared_relations ==1: diff=5
+    elif args.overlap == 1 and args.shared_relations ==2: diff=6
+    elif args.overlap == 1 and args.shared_relations ==3: diff=7
+    elif args.overlap == 2 and args.shared_relations ==0: diff=8
+    elif args.overlap == 2 and args.shared_relations ==1: diff=9
+    elif args.overlap == 2 and args.shared_relations ==2: diff=10
+    elif args.overlap == 2 and args.shared_relations ==3: diff=11
+    elif args.overlap == 3 and args.shared_relations ==0: diff=12
+    elif args.overlap == 3 and args.shared_relations ==1: diff=13
+    elif args.overlap == 3 and args.shared_relations ==2: diff=14
+    elif args.overlap == 3 and args.shared_relations ==3: diff=15
+
     if diff == 1:
         relations_dict = {
             'red-red': [0, 1],
@@ -176,6 +191,7 @@ def main(args):
     metapath_split = metapath.split('-')
     meta = []
     order_colors = []
+    print(metapath_split)
     for elm in metapath_split:
         order_colors.append(color_list.index(elm))
     for i in range(0, len(metapath_split)-1):
@@ -199,10 +215,8 @@ def main(args):
             meta2.append(relations_list.index(metapath_split2[i] + '-' + metapath_split2[i+1]))
 
         order_colors2.reverse()
-        print('colors:', order_colors2)
         metapath_length2 = len(meta2)
         meta2.reverse()
-        print('metapath2: ', meta2)
 
     #####################################
     for i in range(0, num_nodes):
@@ -242,7 +256,6 @@ def main(args):
      
     # meta = [3, 2, 1, 0]
     # METAPATH 1 ############################
-    print('metapath 1', metapath_length)
     for emb_num in range(0, metapath_length):
         if emb_num == 0:
             #print('primo: ', emb_num)
@@ -285,7 +298,6 @@ def main(args):
    ####################################################################################
    # METAPATH 2 ############################
     if args.metapath2:
-        print('metapath 2', metapath_length2)
         for emb_num in range(0, metapath_length2):
             if emb_num == 0:
                 #print('primo: ', emb_num)
@@ -326,7 +338,6 @@ def main(args):
             label_distribution['-'] += 1
         else:
             label_distribution['+'] += 1
-    print(label_distribution)
 
     if args.metapath2:
         for l in label2:
@@ -334,7 +345,6 @@ def main(args):
                 label_distribution2['-'] += 1
             else:
                 label_distribution2['+'] += 1
-        print(label_distribution2)
 
     if args.metapath2:
         for k, v in label2.items():
@@ -347,7 +357,6 @@ def main(args):
             final_distribution['-'] += 1
         else:
             final_distribution['+'] += 1
-    print(final_distribution)
 
 
     if args.metapath:
@@ -362,7 +371,6 @@ def main(args):
     pd_triplets['bool'] = ''
     pd_triplets['color'] = ''
     pd_triplets['color'] = pd_triplets['destination'].map(colors)
-    print(pd_triplets)
     # itero sugli embeddings
     for i, c in enumerate(metapath1_embeddings):
         # trovo gli indici dei nodi che hanno embedding a 1
@@ -380,7 +388,6 @@ def main(args):
             if row['relation'] != meta1[i] and row['color'] == meta_c1[i] and row['source'] in labeled_nodes and row['bool'] != True:
                 pd_triplets.at[index, 'bool'] = False
     df = pd_triplets.loc[~(pd_triplets['bool'] == False)]
-    print(df)
     df = df.drop('bool', axis=1)
     df = df.drop('color', axis=1)
     triplets = df.values.tolist()
@@ -429,16 +436,19 @@ def main(args):
     f.close()
 
 
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='graph creation')
+    parser = argparse.ArgumentParser(description='synthetic graph creation')
     parser.add_argument("--num_nodes", type=int, required=True,
             help="number of nodes")
-    parser.add_argument("--colors", type=str, required=True,
-            help="colors")
     parser.add_argument("--max_rel_for_node", type=int, required=True,
             help="maximum number of outgoing edges for node")
     parser.add_argument("--metapath", type=str, required=True,
             help="target metapath")
+    parser.add_argument("--overlap", type=int, required=True,
+            help="relations overlap")
+    parser.add_argument("--shared_relations", type=int, required=True,
+            help="shared_relations")
     parser.add_argument("--metapath2", type=str, required=False,
             help="target metapath 2")
     parser.add_argument("--metapath3", type=str, required=False,
