@@ -5,9 +5,13 @@ In this project, we have utilized various datasets for training and evaluating t
 
 ### Synthetic
 The synthetic dataset was created to simulate specific scenarios and test the model under controlled conditions. 
-To generate a synthetic dataset, you should go inside directory ```bash /data:
+To generate a synthetic dataset, you should navigate inside directory `data` and run:
 ```python
-import pandas as pd
+bash run_data.sh
+
+In the file you can specify:
+- **Source:**
+
 
 
 
