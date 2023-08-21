@@ -6,9 +6,9 @@ import torch.nn as nn
 import random
 import numpy as np
 
-
-FEATURES_DIM = 100#4231#3066#6##
 from torch.utils.data import Dataset
+
+FEATURES_DIM = 334#1902#100
 
 # Definizione di un dataset personalizzato
 class MyDataset(Dataset):
@@ -239,10 +239,10 @@ class MPNetm(torch.nn.Module):
                 #x = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], x, edge_index, edge_type))
                 if layer_index == 0:
                     h = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], x, edge_index, edge_type))
-                    #h = self.dropout(h)
+                    h = self.dropout(h)
                 else:
                     h = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], h, edge_index, edge_type))
-                    #h = self.dropout2(h)
+                    h = self.dropout2(h)
             embeddings.append(h)
 
         #for e in embeddings:

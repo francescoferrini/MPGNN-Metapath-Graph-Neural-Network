@@ -51,17 +51,22 @@ print(relation_list)
 
 ## Create the new dataset
 # specifico la relazione che diventa label/attributo.    /music/group_member/membership./music/group_membership/group
-#relation = '/people/person/gender'
+relation = '/people/person/gender'
 #relation = '/education/university/international_tuition./measurement_unit/dated_money_value/currency'
 #relation = '/education/university/domestic_tuition./measurement_unit/dated_money_value/currency' # no
 #relation = '/base/biblioness/bibs_location/state/continent'
 #relation = '/people/person/place_of_birth/continent'
 #relation = '/location/statistical_region/gdp_nominal_per_capita./measurement_unit/dated_money_value/currency'
-relation = '/base/schemastaging/person_extra/net_worth./measurement_unit/dated_money_value/currency'
+#relation = '/base/schemastaging/person_extra/net_worth./measurement_unit/dated_money_value/currency'
+#relation = '/education/university/local_tuition./measurement_unit/dated_money_value/currency'
+#relation = '/film/film/estimated_budget./measurement_unit/dated_money_value/currency'
 #relation = '/sports/sports_team/sport'
 #relation = '/base/schemastaging/person_extra/net_worth./measurement_unit/dated_money_value/currency'
 #relation = '/time/event/instance_of_recurring_event'
 #relation = '/film/film/estimated_budget./measurement_unit/dated_money_value/currency'
+#relation = '/location/administrative_division/first_level_division_of'
+#relation = '/location/administrative_division/country'
+#relation = '/organization/endowed_organization/endowment./measurement_unit/dated_money_value/currency'
 #t = /m/05bcl\t/location/administrative_division/first_level_division_of
 # code for labels not present in the dataset
 if relation == '/base/biblioness/bibs_location/country/continent' or relation == '/base/biblioness/bibs_location/state/continent' or relation == '/people/person/place_of_birth/continent':
@@ -132,6 +137,7 @@ else:
 temp_df = triplets[triplets['relation'] == relation]
 print('temp df ', temp_df)
 
+
 # Calcolo del conteggio per ogni elemento nella lista di destination_entity
 count_dict = {}
 for destination in list(possible_destinations_dict.keys()):
@@ -194,8 +200,15 @@ for index, row in triplets.iterrows():
 
 ## Create files
 new_labels = {}
+temp_l = []
 for k, v in labels.items():
-  new_labels[new_entities[k]] = v
+  if k not in new_entities and k not in temp_l:
+    temp_l.append(k)
+print('temp_l: ', temp_l)
+#triplets = triplets[~triplets['source_entity'].isin(temp_l)]
+for k, v in labels.items():
+  if k in new_entities: 
+    new_labels[new_entities[k]] = v
 
 new_node_embeddings = {}
 for k, v in node_embeddings.items():
