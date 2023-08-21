@@ -24,7 +24,6 @@ To generate the graph, you should navigate inside directory `data` and run:
 ```sh
 bash run_data.sh
 ```
-
 In the file you can specify:
 - **dataset:** fb15k-237
 - **relation:** the specific many-to-one relation to be transformed in a label
