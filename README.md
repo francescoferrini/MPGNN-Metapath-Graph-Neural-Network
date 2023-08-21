@@ -10,7 +10,11 @@ To generate a synthetic dataset, you should navigate inside directory `data` and
 bash run_data.sh
 
 In the file you can specify:
-- **Source:**
+- **num_nodes:** total number of nodes in the graph
+- **num_nodes:**
+- **num_nodes:**
+- **num_nodes:**
+
 
 
 
