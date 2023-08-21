@@ -1648,7 +1648,7 @@ def main(node_file_path, link_file_path, label_file_path, relations_legend_file,
         sorted_dictionary = dict(sorted(final_dict.items(), key=lambda item: item[1], reverse=True))
         print(sorted_dictionary)
         
-        primi_3_elementi = dict(list(sorted_dictionary.items())[:3])
+        primi_3_elementi = dict(list(sorted_dictionary.items())[:6])
         print(primi_3_elementi)
 
 
