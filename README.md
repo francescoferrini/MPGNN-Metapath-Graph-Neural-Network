@@ -29,5 +29,15 @@ In the file you can specify:
 - **relation:** the specific many-to-one relation to be transformed in a label
 
 
+## Model
+In order to run the model, navigate in the main folder and run:
+```sh
+bash run.sh
+```
+where in the file you can specify:
+- **dataset:**
+- **number of parallel processes:** since the mpi4py library is used to parallelize the workflow
+
+
 
 
