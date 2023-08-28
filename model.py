@@ -8,7 +8,7 @@ import numpy as np
 
 from torch.utils.data import Dataset
 
-FEATURES_DIM = 334#1902#100
+#FEATURES_DIM = 334#1902#100
 
 # Definizione di un dataset personalizzato
 class MyDataset(Dataset):
@@ -36,11 +36,11 @@ class InputLayer(torch.nn.Module):
         return self.weights
 
 class OutputLayer(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, features_dim):
         super(OutputLayer, self).__init__()
 
         # # Linear layer for features
-        self.LinearLayerAttri = nn.Linear(FEATURES_DIM, 1, bias=False)
+        self.LinearLayerAttri = nn.Linear(features_dim, 1, bias=False)
         #self.Linear = nn.Parameter(torch.ones(FEATURES_DIM))
         
     def forward(self, weights, data: Data, node_dict, BAGS, COMPLEX, feat):
@@ -91,14 +91,15 @@ class OutputLayer(torch.nn.Module):
         return max_weights, max_destination_node_for_source, max_destination_node_for_source
 
 class Score(nn.Module):
-    def __init__(self, weights, COMPLEX):
+    def __init__(self, weights, COMPLEX, features_dim):
         super(Score, self).__init__()
         # if COMPLEX == True, is complex case 
         self.COMPLEX = COMPLEX
+        self.features_dim = features_dim
         # Learnable weights
         self.input = InputLayer(weights)
         # Output layer
-        self.output = OutputLayer()
+        self.output = OutputLayer(self.features_dim)
         # Linear layer for features
         #self.LinearLayerAttri = nn.Linear(FEATURES_DIM, 1, bias=False)
         
