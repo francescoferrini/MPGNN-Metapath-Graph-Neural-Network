@@ -15,25 +15,10 @@ import scipy.sparse as sp
 
 
 def main():
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
+    dizionario = {'[219, 112, 156]': 0.5186344857577735, '[204, 219]': 0.47419004131332904, '[129]': 0.4412144702842377, '[176, 219]': 0.42907662082514736, '[214]': 0.42387152777777776, '[161, 129]': 0.396757457846952}
 
-    num_iterations = 5  # Numero di iterazioni desiderato
+    chiavi_liste = [eval(chiave) for chiave in dizionario.keys()]
 
-    for iteration in range(num_iterations):
-        if rank == 0:
-            data_to_send = f"Dati per l'iterazione {iteration}"
-            for dest_rank in range(1, size):
-                comm.send(data_to_send, dest=dest_rank)
-            print(f"Processo padre ha inviato: {data_to_send}")
-        else:
-            received_data = comm.recv(source=0)
-            print(f"Processo figlio {rank} ha ricevuto: {received_data}")
-        
-        # Sincronizza tutti i processi prima della prossima iterazione
-        comm.Barrier()
-
-    print(f"Processo {rank} ha completato tutte le iterazioni.")
+    print(chiavi_liste)
 if __name__ == '__main__':
     main()

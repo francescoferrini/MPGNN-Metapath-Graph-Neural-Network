@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dataset="fb15k-237" # 'synthetic' or 'fbk15k-237'
+dataset="DBLP" # 'synthetic' or 'fb15k-237'
 hidden_dim=64
 
 if [ "${dataset}" == "fb15k-237" ]; then
@@ -18,7 +18,10 @@ elif [ "${dataset}" == "DBLP" ] || [ "${dataset}" == "IMDB" ] || [ "${dataset}" 
     relations_legend_file=""
     pickle_filename=""
 elif [ "${dataset}" == "synthetic" ]; then
-    folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/${dataset}/"
+    metapath_length=3
+    overlap=0 #0 or 1 or 2 or 3
+    shared_relations=0 #0 or 1 or 2 or 3
+    folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/${dataset}/metapath_length_${metapath_length}/overlap_${overlap}rels_${shared_relations}/"
     node_file="$folder""node.dat"
     link_file="$folder""link.dat"
     label_file="$folder""label.dat"
@@ -26,4 +29,4 @@ elif [ "${dataset}" == "synthetic" ]; then
     pickle_filename=""
 fi
 
-mpiexec -n 3 python main.py --hidden_dim "${hidden_dim}" --dataset "${dataset}" --folder "${folder}" --node_file "${node_file}" --link_file "${link_file}" --label_file "${label_file}" --relations_legend_file "${relations_legend_file}" --pickle_filename "${pickle_filename}" 
+mpiexec -n 10 python main.py --hidden_dim "${hidden_dim}" --dataset "${dataset}" --folder "${folder}" --node_file "${node_file}" --link_file "${link_file}" --label_file "${label_file}" --relations_legend_file "${relations_legend_file}" --pickle_filename "${pickle_filename}" 

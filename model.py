@@ -210,10 +210,10 @@ class MPNetm(torch.nn.Module):
                 #x = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], x, edge_index, edge_type))
                 if layer_index == 0:
                     h = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], x, edge_index, edge_type))
-                    h = self.dropout(h)
+                    #h = self.dropout(h)
                 else:
                     h = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], h, edge_index, edge_type))
-                    h = self.dropout2(h)
+                    #h = self.dropout2(h)
             embeddings.append(h)
 
         #for e in embeddings:
