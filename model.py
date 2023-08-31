@@ -199,8 +199,8 @@ class MPNetm(torch.nn.Module):
         self.log_softmax = torch.nn.LogSoftmax(dim=1)
         #self.softmax = torch.nn.Softmax(dim=1)
 
-        self.dropout = nn.Dropout(0.5)
-        self.dropout2 = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(0.6)
+        self.dropout2 = nn.Dropout(0.6)
 
     def forward(self, x, edge_index, edge_type):
         
@@ -210,10 +210,10 @@ class MPNetm(torch.nn.Module):
                 #x = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], x, edge_index, edge_type))
                 if layer_index == 0:
                     h = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], x, edge_index, edge_type))
-                    #h = self.dropout(h)
+                    h = self.dropout(h)
                 else:
                     h = F.relu(self.layers_list[i][layer_index](layer_index, self.metapaths[i][layer_index], h, edge_index, edge_type))
-                    #h = self.dropout2(h)
+                    h = self.dropout2(h)
             embeddings.append(h)
 
         #for e in embeddings:

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 dataset="fb15k-237" # 'synthetic' or 'fb15k-237'
-folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/${dataset}/"
+folder="/../data/${dataset}/"
 
 if [ "$dataset" == "fb15k-237" ]; then
     node_file="${folder}node_bow.dat"

@@ -83,7 +83,7 @@ def node_types_and_connected_relations(data_obj, BAGS, dataset):
     #    rels = torch.unique(data.edge_type).tolist()
     return rels
     
-def load_files_acm(node_file_path, link_file_path, dataset):
+def load_files_acm(node_file_path, link_file_path, dataset, folder):
      # node features
     features = pd.read_csv(node_file_path, sep='\t', header = None)
     features = features.dropna(axis=1,how='all')
@@ -94,19 +94,19 @@ def load_files_acm(node_file_path, link_file_path, dataset):
     links.rename(columns = {0: 'node_1', 1: 'relation_type', 2: 'node_2'}, inplace = True)
 
     # Labels train
-    labels_df_train = pd.read_csv('/Users/francescoferrini/Desktop/data2/' + dataset + '/labels_train.dat', sep='\t', header = None)
+    labels_df_train = pd.read_csv(folder + 'labels_train.dat', sep='\t', header = None)
     labels_df_train.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
     labels_train = torch.tensor(labels_df_train['label'].values)
     node_idx_train = labels_df_train['node'].values
 
     # Labels validation
-    labels_df_val = pd.read_csv('/Users/francescoferrini/Desktop/data2/' + dataset + '/labels_val.dat', sep='\t', header = None)
+    labels_df_val = pd.read_csv(folder + 'labels_val.dat', sep='\t', header = None)
     labels_df_val.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
     labels_val = torch.tensor(labels_df_val['label'].values)
     node_idx_val = labels_df_val['node'].values
 
     # Labels test
-    labels_df_test = pd.read_csv('/Users/francescoferrini/Desktop/data2/' + dataset + '/labels_test.dat', sep='\t', header = None)
+    labels_df_test = pd.read_csv(folder + 'labels_test.dat', sep='\t', header = None)
     labels_df_test.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
     labels_test = torch.tensor(labels_df_test['label'].values)
     node_idx_test = labels_df_test['node'].values
@@ -183,43 +183,6 @@ def load_files_fb15k237(node_file_path, link_file_path, label_file_path, relatio
         tmp_binary_labels = labels
         binary_labels.append(tmp_binary_labels)
     return labels, features, links, source_nodes_with_labels, tot_relation_types, binary_labels
-
-def load_files_dblp(dataset):
-
-    folder="/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/"
-    features = folder + 'node.dat'
-    colors = pd.read_csv(features, sep='\t', header = None)
-    colors = colors.dropna(axis=1,how='all')
-
-    train_labels = pd.read_csv('/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_train.dat', sep='\t', header = None)
-    train_labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
-    val_labels = pd.read_csv('/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_val.dat', sep='\t', header = None)
-    val_labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
-    test_labels = pd.read_csv('/Users/francescoferrini/VScode/MultirelationalGNN/data2/DBLP/labels_test.dat', sep='\t', header = None)
-    test_labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
-    labels = pd.concat([train_labels, val_labels, test_labels], ignore_index=True)
-    links = pd.read_csv(folder+'link.dat', sep='\t', header = None)
-    labels.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
-    source_nodes_with_labels = labels['node'].values.tolist()
-    labels = torch.tensor(labels['label'].values)
-    colors.rename(columns = {0: 'node', 1: 'color'}, inplace = True)
-    links.rename(columns = {0: 'node_1', 1: 'relation_type', 2: 'node_2'}, inplace = True)
-    num_relations = len(list(set(links['relation_type'].to_list())))
-    new_l = []
-    for i in range(0, len(labels)):
-        if labels[i].item() == 1:
-            new_l.append(1)
-        else:
-            new_l.append(0)
-    new_l = torch.tensor(new_l)
-
-    train_idx = train_labels['node'].values.tolist()
-    train_y = torch.tensor(train_labels['label'].values.tolist())
-    val_idx = val_labels['node'].values.tolist()
-    val_y = torch.tensor(val_labels['label'].values.tolist())
-    test_idx = test_labels['node'].values.tolist()
-    test_y = torch.tensor(test_labels['label'].values.tolist())
-    return labels, colors, links, source_nodes_with_labels, num_relations, new_l, train_idx, train_y, val_idx, val_y, test_idx, test_y
 
 def load_files(node_file_path, link_file_path, label_file_path):
     # node features
@@ -1161,18 +1124,6 @@ def mpgnn_test(model, data, class_weight):
     return loss_test, f1_test_micro
 
 def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapaths):
-    #metapaths = [[2, 0], [3, 1]] # imdb
-    #metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
-    #metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
-    #metapaths = [[2, 1, 0]]
-   # metapaths = [[0, 1, 0, 1], [0, 3, 2, 1]]
-    #metapaths = [[151, 123], [52, 123], [227, 123], [79, 123], [34, 123], [124, 123], [165, 123], [89, 191], [153, 191], [32, 191], [108, 191]]
-    #metapaths = [[34, 123], [221, 18, 191]]
-    #metapaths = [[123], [191]]
-   #metapaths = [[129, 173], [4], [39], [120]]
-    #metapaths = [[175, 62]]
-    #metapaths = [[107, 165, 15], [165, 15], [165, 121], [165, 75], [51, 165], [107, 188]]
-    #metapaths = [[225, 194], [190, 194], [190]]
     print('METAPATHS: ', metapaths)
     mpgnn_model = MPNetm(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapaths), metapaths)
     # for name, param in mpgnn_model.named_parameters():
@@ -1194,22 +1145,7 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
     print("val loss %0.3f" % loss_val, "val macro %0.3f" % f1_val_macro)
     return f1_valt_macro#f1_micro_test
 
-def mpgnn_parallel_multiple_x(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapaths):
-    #metapaths = [[2, 0], [3, 1]] # imdb
-    #metapaths = [[1, 4, 2, 0], [1, 0], [1, 5, 3, 0]]
-    #metapaths = [[4, 3, 0], [1, 0], [0, 4, 2]]
-    #metapaths = [[2, 1, 0]]
-   # metapaths = [[0, 1, 0, 1], [0, 3, 2, 1]]
-    #metapaths = [[151, 123], [52, 123], [227, 123], [79, 123], [34, 123], [124, 123], [165, 123], [89, 191], [153, 191], [32, 191], [108, 191]]
-    #metapaths = [[34, 123], [221, 18, 191]]
-    #metapaths = [[123], [191]]
-   #metapaths = [[129, 173], [4], [39], [120]]
-    #metapaths = [[175, 62]]
-    #metapaths = [[107, 165, 15], [165, 15], [165, 121], [165, 75], [51, 165], [107, 188]]
-    #metapaths = [[177, 184], [72, 184], [92, 97]]
-    #metapaths = [[78], [102], [182, 78]]
-    #metapaths = [[13], [27, 13], [165, 13]]
-    #metapaths = [[1, 0], [3, 2], [2]]
+def mpgnn_parallel_multiple_x(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapaths, testing):
     print('METAPATHS: ', metapaths)
     if isinstance(metapaths[0], int):
         metapaths = [metapaths]
@@ -1229,9 +1165,12 @@ def mpgnn_parallel_multiple_x(data_mpgnn, input_dim, hidden_dim, num_rel, output
             print(epoch, "train loss %0.3f" % loss, "validation loss %0.3f" % loss_val,
                   'train micro: %0.3f'% train_acc, 'validation micro: %0.3f'% f1_val_macro)
             
-    test_loss, f1_micro_test = mpgnn_test(best_model, data_mpgnn, class_weight)
-    print("test loss %0.3f" % test_loss, "test micro %0.3f" % f1_micro_test)
-    return f1_valt_macro#f1_micro_test
+    test_loss, f1_macro_test = mpgnn_test(best_model, data_mpgnn, class_weight)
+    print("test loss %0.3f" % test_loss, "test macro %0.3f" % f1_macro_test)
+    if testing == False:
+        return f1_valt_macro
+    else: 
+        return f1_macro_test
 
 def find_smallest_values(accuracies_list):
     # Creazione del modello DBSCAN
@@ -1275,7 +1214,7 @@ def main(args):
         if args.dataset == 'fb15k-237':
             true_labels, features, edges, sources, tot_relation_types, binary_labels = load_files_fb15k237(args.node_file, args.link_file, args.label_file, args.relations_legend_file)
         elif args.dataset in ['DBLP', 'IMDB', 'ACM']:
-            sources, train_idx, train_y, test_idx, test_y, val_idx, val_y, features, edges, binary_labels, tot_relation_types = load_files_acm(args.node_file, args.link_file, args.dataset)
+            sources, train_idx, train_y, test_idx, test_y, val_idx, val_y, features, edges, binary_labels, tot_relation_types = load_files_acm(args.node_file, args.link_file, args.dataset, args.folder)
         elif args.dataset == 'synthetic':
             true_labels, features, edges, binary_labels, tot_relation_types = load_files(args.node_file, args.link_file, args.label_file)
         final_dict = {}
@@ -1483,7 +1422,6 @@ def main(args):
                     create_bags(current_metapaths_dict[str(current_metapaths_list[i])][2], current_metapaths_dict[str(current_metapaths_list[i])][3], current_metapaths_dict[str(current_metapaths_list[i])][4])
                     actual_relations = node_types_and_connected_relations(current_metapaths_dict[str(current_metapaths_list[i])][4], BAGS=True, dataset=args.dataset)
                     #print('meta: ', current_metapaths_list[i], 'actual relations: ', actual_relations)
-                    print('actual : ', len(actual_relations), actual_relations)
                     final_metapaths_list.append(current_metapaths_list[i])
                     intermediate_metapaths_list.remove(current_metapaths_list[i])
                 actual_relations = comm.bcast(actual_relations, root=0)
@@ -1535,11 +1473,10 @@ def main(args):
                         for j in range(0, len(final_result)):
                             data_copy = copy.copy(current_metapaths_dict[str(current_metapaths_list[i])][4])
                             #print('relation', final_result[j][0], 'score: ', final_result[j][1])
-                            if (len(array_differenze) > 2 and final_result[j][1] < arr[indice]) or len(array_differenze) == 0 or len(array_differenze) == 1: #np.mean([t[1] for t in final_result]): #0.01:
+                            if (len(array_differenze) > 2 and final_result[j][1] < arr[indice]) or len(array_differenze) == 0 or len(array_differenze) == 1: 
                             #if final_result[j][1] <= 0.02:
                                 tmp_meta = current_metapaths_list[i].copy()
                                 tmp_meta.insert(0, final_result[j][0])
-                                #print('temp meta: ', tmp_meta)
                                 intermediate_metapaths_list.append(tmp_meta)
                                 if tmp_meta not in final_metapaths_list:
                                     final_metapaths_list.append(tmp_meta)
@@ -1595,7 +1532,7 @@ def main(args):
         old_macro = 0.0
         for k in chiavi_liste:
             test_meta.append(k)
-            test_f1_macro = mpgnn_parallel_multiple_x(data_mpgnn, input_dim, hidden_dim, tot_relation_types, output_dim, ll_output_dim, test_meta)
+            test_f1_macro = mpgnn_parallel_multiple_x(data_mpgnn, input_dim, hidden_dim, tot_relation_types, output_dim, ll_output_dim, test_meta, True)
             if test_f1_macro > old_macro:
                 old_macro = test_f1_macro
                 f_meta.append(k)
@@ -1611,31 +1548,6 @@ if __name__ == '__main__':
     COMPLEX = 'fb15k-237'
     RESTARTS = 5
     NEGATIVE_SAMPLING = False
-
-    '''hidden_dim=64
-    output_dim=hidden_dim
-    #dataset = 'fb15k-237'
-    dataset = 'DBLP'
-    if dataset == 'fb15k-237':
-        folder="/Users/francescoferrini/VScode/MultirelationalGNN/data/" + dataset + "/"
-        node_file= folder + "node_bow.dat"
-        link_file= folder + "link.dat"
-        label_file= folder + "label.dat"
-        relations_legend_file = folder + 'relations_legend.dat'
-        # Define the filename for saving the variables
-        pickle_filename = folder + "iteration_variables.pkl"
-    else:
-        folder='/Users/francescoferrini/Desktop/data2/' + dataset + "/"
-        node_file= folder + "node_bow.dat"
-        link_file= folder + "link.dat"
-        label_file= None
-        relations_legend_file = None
-        # Define the filename for saving the variables
-        pickle_filename = None
-    
-    # mpgnn variables
-    
-    meta = main(node_file, link_file, label_file, relations_legend_file, pickle_filename, hidden_dim, output_dim, dataset, folder)'''
 
 
     parser = argparse.ArgumentParser(description='learning meta-paths')
