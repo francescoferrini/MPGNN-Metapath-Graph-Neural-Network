@@ -1255,8 +1255,8 @@ def main(args):
             #x = mask_features_test_nodes(test_idx, val_idx, train_idx, x)
             if args.dataset == 'fb15k-237':
                 x = mask_features_test_nodes(test_idx, val_idx, train_idx, x)
-            elif args.dataset in ['DBLP', 'IMDB', 'ACM']:
-                x = mask_features_test_nodes(test_idx, test_idx, test_idx, x)
+            '''elif args.dataset in ['DBLP', 'IMDB', 'ACM']:
+                x = mask_features_test_nodes(test_idx, test_idx, test_idx, x)'''
 
 
             # Dataset for MPGNN

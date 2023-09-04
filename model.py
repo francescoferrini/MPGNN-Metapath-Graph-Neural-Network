@@ -8,8 +8,6 @@ import numpy as np
 
 from torch.utils.data import Dataset
 
-#FEATURES_DIM = 334#1902#100
-
 # Definizione di un dataset personalizzato
 class MyDataset(Dataset):
     def __init__(self, x, y):
