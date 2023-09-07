@@ -95,7 +95,7 @@ class CustomRGCNConv(MessagePassing):
         num_relations: int,
         num_bases: Optional[int] = None,
         num_blocks: Optional[int] = None,
-        aggr: str = 'sum',#'mean',
+        aggr: str = 'mean',#'sum',
         root_weight: bool = True,
         bias: bool = True,
         **kwargs,

@@ -94,6 +94,7 @@ def load_files_acm(node_file_path, link_file_path, dataset, folder):
     links.rename(columns = {0: 'node_1', 1: 'relation_type', 2: 'node_2'}, inplace = True)
 
     # Labels train
+    #labels_df_train = pd.read_csv(folder + 'labels_train.dat', sep='\t', header = None)
     labels_df_train = pd.read_csv(folder + 'labels_train.dat', sep='\t', header = None)
     labels_df_train.rename(columns = {0: 'node', 1: 'label'}, inplace = True)
     labels_train = torch.tensor(labels_df_train['label'].values)
@@ -113,14 +114,6 @@ def load_files_acm(node_file_path, link_file_path, dataset, folder):
 
     source_nodes_with_labels = labels_df_train['node'].values.tolist() + labels_df_val['node'].values.tolist() + labels_df_test['node'].values.tolist()
     labels = torch.tensor(labels_train.tolist() + labels_val.tolist() + labels_test.tolist())
-
-    '''binary_labels = []
-    for i in range(0, len(labels)):
-        if labels[i].item() == 0:
-            binary_labels.append(1)
-        else:
-            binary_labels.append(0)
-    binary_labels = torch.tensor(binary_labels)'''
 
     tot_relation_types = len(list(set(links['relation_type'].to_list())))
 
@@ -165,7 +158,6 @@ def load_files_fb15k237(node_file_path, link_file_path, label_file_path, relatio
 
     # If not binary classification then for score function need to make it binary.
     # 1 class vs others
-    valore_frequente = valore_piu_frequente(labels.tolist())
     #print('value: ', valore_frequente)
     binary_labels = []
     if len(torch.unique(labels).tolist()) > 2:
@@ -179,7 +171,6 @@ def load_files_fb15k237(node_file_path, link_file_path, label_file_path, relatio
             tmp_binary_labels = torch.tensor(tmp_binary_labels)
             binary_labels.append(tmp_binary_labels)
     else:
-        print('here')
         tmp_binary_labels = labels
         binary_labels.append(tmp_binary_labels)
     return labels, features, links, source_nodes_with_labels, tot_relation_types, binary_labels
@@ -363,7 +354,7 @@ def get_node_features(colors):
     x = torch.from_numpy(x) 
     return x
 
-def mask_features_test_nodes(test_index, val_index, train_index, feature_matrix):
+def sn(test_index, val_index, train_index, feature_matrix):
     for indice in test_index:
         feature_matrix[indice] = torch.zeros_like(feature_matrix[indice])
     for indice in val_index:
@@ -1124,10 +1115,7 @@ def mpgnn_test(model, data, class_weight):
     return loss_test, f1_test_micro
 
 def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapaths):
-    print('METAPATHS: ', metapaths)
     mpgnn_model = MPNetm(input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, len(metapaths), metapaths)
-    # for name, param in mpgnn_model.named_parameters():
-    #     print(name, param, param.size())
     mpgnn_optimizer = torch.optim.Adam(mpgnn_model.parameters(), lr=0.01, weight_decay=0.0005)
     best_macro, best_micro = 0., 0.
     for epoch in range(1, 1000):
@@ -1142,11 +1130,10 @@ def mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, num_rel, output_d
             
     test_loss, f1_micro_test = mpgnn_test(best_model, data_mpgnn, class_weight)
     #print("test loss %0.3f" % test_loss, "test micro %0.3f" % f1_micro_test)
-    print("val loss %0.3f" % loss_val, "val macro %0.3f" % f1_val_macro)
+    #print("val loss %0.3f" % loss_val, "val macro %0.3f" % f1_val_macro)
     return f1_valt_macro#f1_micro_test
 
 def mpgnn_parallel_multiple_x(data_mpgnn, input_dim, hidden_dim, num_rel, output_dim, ll_output_dim, metapaths, testing):
-    print('METAPATHS: ', metapaths)
     if isinstance(metapaths[0], int):
         metapaths = [metapaths]
 
@@ -1161,9 +1148,9 @@ def mpgnn_parallel_multiple_x(data_mpgnn, input_dim, hidden_dim, num_rel, output
         if f1_val_macro > best_micro:
             best_micro = f1_val_macro
             best_model = mpgnn_model
-        if epoch % 100 == 0:
+        '''if epoch % 100 == 0:
             print(epoch, "train loss %0.3f" % loss, "validation loss %0.3f" % loss_val,
-                  'train micro: %0.3f'% train_acc, 'validation micro: %0.3f'% f1_val_macro)
+                  'train micro: %0.3f'% train_acc, 'validation micro: %0.3f'% f1_val_macro)'''
             
     test_loss, f1_macro_test = mpgnn_test(best_model, data_mpgnn, class_weight)
     print("test loss %0.3f" % test_loss, "test macro %0.3f" % f1_macro_test)
@@ -1226,12 +1213,10 @@ def main(args):
         
     for list_index, binary_lab in enumerate(binary_labels):
         if rank == 0: 
-            print('///////// ', list_index, '//////////', len(binary_labels))
             x = get_node_features(features)
             
             if args.dataset == 'fb15k-237':
                 input_dim = len(x[0])
-                #print('x ', x.size(), input_dim)
                 ll_output_dim = len(torch.unique(true_labels).tolist())
             elif args.dataset in ['DBLP', 'IMDB', 'ACM']: 
                 input_dim = len(x[0])
@@ -1251,12 +1236,9 @@ def main(args):
             elif args.dataset in ['DBLP', 'IMDB', 'ACM']:
                 node_idx = sources
 
-            # Mask features of test nodes (only when features and labels are same thing)
-            #x = mask_features_test_nodes(test_idx, val_idx, train_idx, x)
             if args.dataset == 'fb15k-237':
-                x = mask_features_test_nodes(test_idx, val_idx, train_idx, x)
-            '''elif args.dataset in ['DBLP', 'IMDB', 'ACM']:
-                x = mask_features_test_nodes(test_idx, test_idx, test_idx, x)'''
+                x = sn(test_idx, val_idx, train_idx, x)
+
 
 
             # Dataset for MPGNN
@@ -1278,8 +1260,8 @@ def main(args):
                 source_nodes_mask = []
 
             # generate files for gtn
-            gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data_mpgnn, args.folder)
-            print('gtn finished')
+            #gtn_files(node_idx, train_idx, train_y, test_idx, test_y, val_idx, val_y, data_mpgnn, args.folder)
+            #print('gtn finished')
         
         
         if rank == 0:
@@ -1305,7 +1287,7 @@ def main(args):
             # All possible relations
             relations = torch.unique(data.edge_type).tolist()
             actual_relations = node_types_and_connected_relations(data, BAGS=False, dataset=args.dataset)
-            #print(actual_relations)
+            
             result = []
             intermediate_metapaths_list = []
         else:
@@ -1324,7 +1306,6 @@ def main(args):
             output_dim = None
             ll_output_dim = None
 
-        # Il processo padre invia i dati ai processi figli
         data = comm.bcast(data, root=0)
         relations = comm.bcast(relations, root=0)
         actual_relations = comm.bcast(actual_relations, root=0)
@@ -1344,36 +1325,28 @@ def main(args):
             partial_result = score_relation_parallel(data, rel, data.source_nodes_mask, input_dim, dataset=args.dataset)
             p_result.append(partial_result)
 
-        # Ogni processo figlio invia il risultato al processo padre
         result = comm.gather(p_result, root=0)
         if rank == 0:
-        #print('local: ', local_relations)
             final_result = sum(result, [])
 
         if rank == 0:
             #training when needed
             #test_f1_macro = mpgnn_parallel_multiple_x(data_mpgnn, input_dim, hidden_dim, tot_relation_types, output_dim, ll_output_dim, [0])
 
-            min_a, min_n = 100, 0
+            min_a = 100
             for r in final_result:
-                #print(r[0], r[1])
                 if r[1] < min_a:
                     min_a = r[1]
-                    min_n = r[0]
-            #print()
+            
             rels, accs = [], []
             for item in final_result:
-                value_0 = item[0]  # Valore in posizione 0
-                value_1 = item[1]  # Valore in posizione 1
+                value_0 = item[0]  
+                value_1 = item[1]  
                 rels.append(value_0)
                 accs.append(value_1)
-            #smallest_values = find_smallest_values(accs)
-            #print('smallest : ', smallest_values, min_n, min_a)
 
-            # creo l'array delle differenze per scegliere quali relazioni considerare
             accs.sort()
             array_differenze = np.diff(accs)
-            #print('array differenze: ', array_differenze)
             if len(array_differenze) >= 2:
                 indice = np.argmax(array_differenze)
                 # take only the relations under the mean threshold (best is a list of tuples
@@ -1387,9 +1360,6 @@ def main(args):
             # final_result[0][2] -> edge_dictionary
             # final_result[0][3] -> dest_dictionary
 
-            
-            #best = [item for item in final_result if item[1] <= min_a]
-            # save relations in metapaths list
             data_copy = copy.copy(data)
             for tuple in best:
                 current_metapaths_list.append([tuple[0]])
@@ -1400,9 +1370,7 @@ def main(args):
                 current_metapaths_dict[str([tuple[0]])].append(data_copy)
             for i in range(0, len(current_metapaths_list)):
                 mpgnn_f1_micro = mpgnn_parallel_multiple(data_mpgnn, input_dim, hidden_dim, tot_relation_types, output_dim, ll_output_dim, [current_metapaths_list[i]])
-                current_metapaths_dict[str(current_metapaths_list[i])].insert(1, mpgnn_f1_micro)
-            # print(current_metapaths_list)
-            # print(current_metapaths_dict)    
+                current_metapaths_dict[str(current_metapaths_list[i])].insert(1, mpgnn_f1_micro)   
 
         # send current metapaths list and dict to children
         current_metapaths_list = comm.bcast(current_metapaths_list, root=0)
@@ -1410,13 +1378,8 @@ def main(args):
         if rank ==0:
             final_metapaths_list = current_metapaths_list.copy()
             intermediate_metapaths_list = current_metapaths_list.copy()
-        #'''
-        #while current_metapaths_list:
         for k in range(3):
-            #if rank == 0:
-                #print('------------------------Level ', k, ' -----------------------------', current_metapaths_list)
             for i in range(0, len(current_metapaths_list)):
-                #print('-----------------------NEXT-----------------------', i , len(current_metapaths_list), current_metapaths_list, type(data), data)
                 if rank == 0:
                     #intermediate_metapaths_list = current_metapaths_list.copy()
                     create_bags(current_metapaths_dict[str(current_metapaths_list[i])][2], current_metapaths_dict[str(current_metapaths_list[i])][3], current_metapaths_dict[str(current_metapaths_list[i])][4])
@@ -1425,51 +1388,36 @@ def main(args):
                     final_metapaths_list.append(current_metapaths_list[i])
                     intermediate_metapaths_list.remove(current_metapaths_list[i])
                 actual_relations = comm.bcast(actual_relations, root=0)
-                    #print('bags: ', data.bags)
+                
                 
                 # check whether there are relations
                 
                 if len(actual_relations) > 0:
-                    #print('acutal ;; ', rank, len(actual_relations), actual_relations)
-                    # Il processo padre invia i dati ai processi figli
                     actual_data = comm.bcast(current_metapaths_dict[str(current_metapaths_list[i])][4], root=0)
                     actual_relations = comm.bcast(actual_relations, root=0)
 
-                    # Ogni processo figlio riceve solo una parte della lista graph
+                    
                     local_relations = np.array_split(actual_relations, size)[rank]
-                    # Execute the function
-                    #for rel in local_relations:
-                    #    partial_result = score_relation_bags_parallel(data, rel)
 
                     p_result = []
                     for rel in local_relations:
                         partial_result = score_relation_bags_parallel(actual_data, rel, input_dim, dataset=args.dataset)
                         if partial_result[4] != True: 
                             p_result.append(partial_result)
-                    # Ogni processo figlio invia il risultato al processo padre
+                    
                     result = comm.gather(p_result, root=0)
                     if rank == 0:
-                        #print('local ', local_relations)
-                        at_least_one = False
                         arr = []
-                        bool = False
-                        # Il processo padre raccoglie i risultati dai processi figli e li combina in una singola lista
+                        
                         final_result = sum(result, [])
                         for r in final_result:
                             arr.append(r[1])
-                        # creo l'array delle differenze per scegliere quali relazioni considerare
+                        
                         arr.sort()
                         array_differenze = np.diff(arr)
                         if len(array_differenze) > 2:
                             indice = np.argmax(array_differenze)
-                        #print('len array diff ', len(array_differenze))
-                        '''else:
-                            indice = 0
-                            arr[indice] = array_differenze[indice]'''
-                        #print('threshold: ', arr[indice])
-                        # relation, loss.item(), model, predictions_for_each_restart
-                        count = 0
-                        best_actual_f1 = None
+
                         for j in range(0, len(final_result)):
                             data_copy = copy.copy(current_metapaths_dict[str(current_metapaths_list[i])][4])
                             #print('relation', final_result[j][0], 'score: ', final_result[j][1])
@@ -1488,9 +1436,6 @@ def main(args):
                                 
             
             intermediate_metapaths_list = comm.bcast(intermediate_metapaths_list, root=0)
-            '''if rank ==0:
-                print('interm ', intermediate_metapaths_list)
-                print('curr: ', current_metapaths_list)'''
             current_metapaths_list = intermediate_metapaths_list.copy()
             current_metapaths_dict = comm.bcast(current_metapaths_dict, root=0)
         # send variables to children
@@ -1499,11 +1444,9 @@ def main(args):
         sublist_size = len(final_metapaths_list) // size
         remainder = len(final_metapaths_list) % size
 
-        # Calcola l'indice iniziale e finale delle sottoliste per ogni processo figlio
         start_index = rank * sublist_size + min(rank, remainder)
         end_index = start_index + sublist_size + (1 if rank < remainder else 0)
 
-        # Suddividi la lista tra i processi figlio
         local_data = final_metapaths_list[start_index:end_index]
 
         data_mpgnn = comm.bcast(data_mpgnn, root=0)
@@ -1517,13 +1460,6 @@ def main(args):
         if rank == 0:
             for dictionary in result:
                 final_dict.update(dictionary)
-
-            '''sorted_dictionary = dict(sorted(final_dict.items(), key=lambda item: item[1], reverse=True))
-            print(sorted_dictionary)
-            
-            primi_3_elementi = dict(list(sorted_dictionary.items())[:6])
-            print(primi_3_elementi)'''
-        #comm.Barrier()
     if rank==0:
         sorted_dictionary = dict(sorted(final_dict.items(), key=lambda item: item[1], reverse=True))
         best_elements = dict(list(sorted_dictionary.items())[:3])
