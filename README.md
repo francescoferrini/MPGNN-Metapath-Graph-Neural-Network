@@ -1,4 +1,4 @@
-# MultirelationalGNN
+# MPGNN
 
 ## Datasets
 In this project, we have utilized various datasets for training and evaluating the model. Below are the data sources and relevant information for each dataset used.
